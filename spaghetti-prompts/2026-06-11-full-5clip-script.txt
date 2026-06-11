@@ -42,11 +42,11 @@ Visual: Direct gaze, warning gesture
 ════════════════════════════════════════════════════════════
 
 ## OUTRO (Clip 5) — 10s
-Style: 90s cable news sign-off — confident anchor wrap-up
-Visual: Newscaster signs off, professional closing expression
+Style: 90s cable news sign-off — dramatic anchor close, throw to next segment
+Visual: Newscaster leans back slightly, knowing expression, gestures off-screen
 
-"Anthropic forced to reverse course on its secret sabotage scheme after brutal backlash. Stay tuned for more on this developing story."
-[22 words]
+"A digital betrayal exposed. An AI giant forced to retreat. And a warning for every builder in the game. The AI wars are just getting started. Stay locked in."
+[30 words]
 
 ════════════════════════════════════════════════════════════
 
@@ -56,7 +56,7 @@ Visual: Newscaster signs off, professional closing expression
 - [ ] Clip 2: The Secret Sabotage (10s, 24w)
 - [ ] Clip 3: The Walk Back (10s, 24w)
 - [ ] Clip 4: The Strategic Warning (10s, 24w)
-- [ ] Clip 5: OUTRO — 90s news sign-off (10s, 22w)
+- [ ] Clip 5: OUTRO — 90s news sign-off (10s, 30w)
 
 # After all clips:
 - [ ] Download each clip from Grok Imagine
@@ -68,8 +68,9 @@ Visual: Newscaster signs off, professional closing expression
 ════════════════════════════════════════════════════════════
 
 ## Notes for Generation
-- All scripts are 22-24 words — fits 10s at news-anchor pace (2.5 wps)
+- All scripts are 24-30 words — fits 10s at news-anchor pace (2.5 wps)
 - Each clip is a standalone 10s thought — no clip depends on another
 - Visual notes suggest newscaster expression but Grok Imagine will interpret naturally
 - For image-to-video: use base newscaster image for each clip
 - Consider switching base image angle/expression between clips for variety
+- Outro uses a "dramatic summary + forward hook" structure typical of 90s cable news
