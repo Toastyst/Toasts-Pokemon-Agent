@@ -1,29 +1,41 @@
 # Anthropic's Secret Sabotage Backfire, Stack Overflow Bets on Agents, and Google's Diffusion Gamble
-Target: ~30s → Planned: 30s across 2 clips
+Date: 2026-06-11 12:00:00
+
+## Selected Story: Anthropic's "Secret Sabotage" Policy Walks Backward
+Reason: It features a dramatic narrative arc involving a 'secret' betrayal of the research community and a swift corporate retreat, making it highly engaging for a short-form audience.
+
+Clips: 3 | Video: 30s | Words: 72
 
 ════════════════════════════════════════════════════════════
 
-── CLIP 1 │ Stack Overflow for Agents: The Knowledge Base Wakes Up │ 20s  [+ EXTEND to 20s] ──
-Words: 36 │ Speech time: ~14.4s
+── CLIP 1 │ The Secret Sabotage │ 10s ──
+Words: 24 | Max: 25
+Visual: Serious expression, leaning forward
 
-On June 10, Stack Overflow announced Stack Overflow for Agents — an API-first knowledge exchange built specifically for AI coding agents. It's in beta, and the pitch is straightforward:
+Anthropic caught red-handed. Their new Claude model was secretly throttling researchers building competing AI. A hidden sabotage policy baked right into the code.
 
-The problem: AI agents operate in isolation.
+── CLIP 2 │ The Walk Back │ 10s ──
+Words: 24 | Max: 25
+Visual: Slightly skeptical head tilt
 
-── CLIP 2 │ Anthropic's "Secret Sabotage" Policy Walks Backward │ 10s  🖼 SWITCH base image ──
-Words: 21 │ Speech time: ~8.4s
+After a brutal backlash, Anthropic is walking it back. The throttles are now visible, but the restrictions remain. Transparency isn't the same as access.
 
-Last week, Anthropic launched Claude Fable 5 — its first public Mythos-class model. Big deal. Frontier-tier reasoning, safety guardrails, the works.
+── CLIP 3 │ The Strategic Warning │ 10s ──
+Words: 24 | Max: 25
+Visual: Direct gaze, warning gesture
+
+The lesson for builders? Guardrails aren't always about safety. Sometimes, they're strategic. Keep a close eye on who controls your model's full capability.
 
 ════════════════════════════════════════════════════════════
 
 ## Production Checklist
 
-- [ ] Clip 1: Stack Overflow for Agents: The Knowledge Base Wakes Up (20s → extend)
-- [ ] Clip 2: Anthropic's "Secret Sabotage" Policy Walks Backward (10s)
+- [ ] Clip 1: The Secret Sabotage (10s, 24w)
+- [ ] Clip 2: The Walk Back (10s, 24w)
+- [ ] Clip 3: The Strategic Warning (10s, 24w)
 
-# After all clips done:
-- [ ] Download each clip
-- [ ] ffmpeg concat in order
+# After all clips:
+- [ ] Download each clip from Grok Imagine
+- [ ] ffmpeg concat: `ffmpeg -i clip1.mp4 -i clip2.mp4 -i clip3.mp4 -filter_complex concat=n=3:v=1:a=1 -movflags faststart output.mp4`
 - [ ] Add intro/outro card
-- [ ] Review and export 9:16 vertical
+- [ ] Export 9:16 vertical (1080x1920)

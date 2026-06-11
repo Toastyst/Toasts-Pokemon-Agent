@@ -22,7 +22,7 @@ WPS = 2.5  # words/sec for news anchor (~150 wpm)
 CLIP_WORDS = 25  # hard max per 10s clip
 CLIP_SECONDS = 10
 
-DEFAULT_MODEL = 'google/gemma-3-27b-it:free'
+DEFAULT_MODEL = 'google/gemma-4-31b-it:free'
 
 # ── Parsing ─────────────────────────────────────────────────────────────
 
