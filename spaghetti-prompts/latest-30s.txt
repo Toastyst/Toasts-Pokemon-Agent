@@ -1,0 +1,29 @@
+# Anthropic's Secret Sabotage Backfire, Stack Overflow Bets on Agents, and Google's Diffusion Gamble
+Target: ~30s → Planned: 30s across 2 clips
+
+════════════════════════════════════════════════════════════
+
+── CLIP 1 │ Stack Overflow for Agents: The Knowledge Base Wakes Up │ 20s  [+ EXTEND to 20s] ──
+Words: 36 │ Speech time: ~14.4s
+
+On June 10, Stack Overflow announced Stack Overflow for Agents — an API-first knowledge exchange built specifically for AI coding agents. It's in beta, and the pitch is straightforward:
+
+The problem: AI agents operate in isolation.
+
+── CLIP 2 │ Anthropic's "Secret Sabotage" Policy Walks Backward │ 10s  🖼 SWITCH base image ──
+Words: 21 │ Speech time: ~8.4s
+
+Last week, Anthropic launched Claude Fable 5 — its first public Mythos-class model. Big deal. Frontier-tier reasoning, safety guardrails, the works.
+
+════════════════════════════════════════════════════════════
+
+## Production Checklist
+
+- [ ] Clip 1: Stack Overflow for Agents: The Knowledge Base Wakes Up (20s → extend)
+- [ ] Clip 2: Anthropic's "Secret Sabotage" Policy Walks Backward (10s)
+
+# After all clips done:
+- [ ] Download each clip
+- [ ] ffmpeg concat in order
+- [ ] Add intro/outro card
+- [ ] Review and export 9:16 vertical
