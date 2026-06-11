@@ -1,0 +1,32 @@
+{
+  "Qwen3 Next 80B": {
+    "model": "qwen/qwen3-next-80b-a3b-instruct:free",
+    "label": "Qwen3 Next 80B",
+    "select_time": 0.3,
+    "select_error": "HTTP Error 429: Too Many Requests"
+  },
+  "Gemma 3 27B": {
+    "model": "google/gemma-3-27b-it:free",
+    "label": "Gemma 3 27B",
+    "select_time": 0.1,
+    "select_error": "HTTP Error 404: Not Found"
+  },
+  "Llama 3.3 70B": {
+    "model": "meta-llama/llama-3.3-70b-instruct:free",
+    "label": "Llama 3.3 70B",
+    "select_time": 0.3,
+    "select_error": "HTTP Error 429: Too Many Requests"
+  },
+  "Hermes 3 405B": {
+    "model": "nousresearch/hermes-3-llama-3.1-405b:free",
+    "label": "Hermes 3 405B",
+    "select_time": 0.2,
+    "select_error": "HTTP Error 429: Too Many Requests"
+  },
+  "Venice Uncensored": {
+    "model": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+    "label": "Venice Uncensored",
+    "select_time": 0.2,
+    "select_error": "HTTP Error 402: Payment Required"
+  }
+}

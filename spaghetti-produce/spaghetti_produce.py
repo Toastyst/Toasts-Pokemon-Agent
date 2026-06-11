@@ -1,409 +1,330 @@
 #!/usr/bin/env python3
 """
-spaghetti-produce: Extract story sections from SpaghettiStories posts
-and rewrite them into TTS-friendly spoken-word scripts for Grok Imagine.
+spaghetti-produce v4: LLM-enhanced pipeline using Gemma 3 27B via OpenRouter.
 
-Each clip targets Grok Imagine video generation with voiceover.
-Clip durations: 6s (brief), 10s (standard), or 20s (10s + 10s extend).
-
-Voiceover pacing: ~150 words/min = 2.5 words/sec (news anchor delivery)
-  6s  → ~15 words  (1-2 short sentences)
-  10s → ~25 words  (2-3 sentences)
-  20s → ~50 words  (4-6 sentences)
+Pipeline:
+  1. Parse blog post → extract sections
+  2. LLM (Gemma 3 27B) selects the single best story
+  3. LLM writes broadcast-ready voiceover scripts (10s clips, 25 words max)
+  4. Output production-ready script file
 
 Usage:
     python3 spaghetti_produce.py latest
-    python3 spaghetti_produce.py <post-file.md>
-    python3 spaghetti-produce.py latest --max-clips 3
+    python3 spaghetti_produce.py latest -t 40
+    python3 spaghetti_produce.py <file.md>
+    python3 spaghetti_produce.py <file.md> --model google/gemma-3-27b-it:free
 """
 
-import re
-import sys
-import os
-import glob
-import json
-import argparse
-from pathlib import Path
-from datetime import datetime
+import json, os, re, sys, time, urllib.request, argparse, glob
 
 # ── Config ──────────────────────────────────────────────────────────────
-WPS = 2.5  # words per second (news anchor pace, ~150 wpm)
+WPS = 2.5  # words/sec for news anchor (~150 wpm)
+CLIP_WORDS = 25  # hard max per 10s clip
+CLIP_SECONDS = 10
 
-CLIP_PRESETS = {
-    'brief':   {'seconds': 6,  'words': 15,  'label': '6s (brief)'},
-    'standard': {'seconds': 10, 'words': 25,  'label': '10s (standard)'},
-    'extended': {'seconds': 20, 'words': 50,  'label': '20s (10s+extend)'},
-}
+DEFAULT_MODEL = 'google/gemma-3-27b-it:free'
 
 # ── Parsing ─────────────────────────────────────────────────────────────
 
-def parse_frontmatter(raw: str) -> dict:
+def parse_fm(raw):
     m = re.match(r'^---\s*\n(.*?)\n---\s*\n', raw, re.DOTALL)
-    if not m:
-        return {}
+    if not m: return {}
     fm = {}
     for line in m.group(1).splitlines():
         line = line.strip()
-        if not line or line.startswith('#'):
-            continue
+        if not line or line.startswith('#'): continue
         kv = re.match(r'^(\w[\w-]*):\s*(.*)', line)
         if kv:
-            key = kv.group(1)
-            val = kv.group(2).strip()
-            if (val.startswith('"') and val.endswith('"')) or \
-               (val.startswith("'") and val.endswith("'")):
-                val = val[1:-1]
-            if val.startswith('[') and val.endswith(']'):
-                inner = val[1:-1]
-                val = [v.strip().strip('"').strip("'") for v in inner.split(',') if v.strip()]
-            fm[key] = val
+            k, v = kv.group(1), kv.group(2).strip()
+            for q in ['"', "'"]:
+                if v.startswith(q) and v.endswith(q): v = v[1:-1]
+            if v.startswith('[') and v.endswith(']'):
+                v = [x.strip().strip('"').strip("'") for x in v[1:-1].split(',') if x.strip()]
+            fm[k] = v
     return fm
 
 
-def extract_sections(raw: str) -> list[dict]:
+def extract_sections(raw):
     body = re.sub(r'^---\s*\n.*?\n---\s*\n', '', raw, flags=re.DOTALL)
     body = re.sub(r'\{%\s*include\s+[^%]+\s*%\}', '', body)
-    parts = re.split(r'\n(?=## )', body)
     sections = []
-    for part in parts:
+    for part in re.split(r'\n(?=## )', body):
         part = part.strip()
-        if not part:
-            continue
-        lines = part.splitlines()
-        heading = ''
-        content_lines = []
-        for line in lines:
-            if line.startswith('## '):
-                heading = line[3:].strip()
-            else:
-                content_lines.append(line)
+        if not part: continue
+        heading, content_lines = '', []
+        for line in part.splitlines():
+            if line.startswith('## '): heading = line[3:].strip()
+            else: content_lines.append(line)
         content = '\n'.join(content_lines).strip()
         if heading and content:
-            sections.append({'heading': heading, 'content': content})
+            sections.append({'heading': heading, 'content': content, 'index': len(sections)+1})
     return sections
 
 
-def clean_blog_markdown(text: str) -> str:
-    """Strip blog-specific markdown for TTS rewriting."""
-    # Remove image includes
+def clean(text):
     text = re.sub(r'\{%\s*include\s+[^%]+\s*%\}', '', text)
-    # Links → just text
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
-    text = re.sub(r'\[([^\]]+)\][^\(]', r'\1', text)
-    # Bold/italic markers
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
     text = re.sub(r'\*([^*]+)\*', r'\1', text)
-    text = re.sub(r'__([^_]+)__', r'\1', text)
-    # Blockquotes
-    text = re.sub(r'^>\s+', '', text, flags=re.MULTILINE)
-    # Horizontal rules
-    text = re.sub(r'^-{3,}\s*$', '', text, flags=re.MULTILINE)
-    # Parenthetical asides
-    text = re.sub(r'\s*\([^)]+\)\s*', ' ', text)
-    # URLs
     text = re.sub(r'https?://\S+', '', text)
-    # Clean up
+    text = re.sub(r'\s*\([^)]+\)\s*', ' ', text)
     text = re.sub(r'  +', ' ', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
 
 
-def wc(text: str) -> int:
-    return len(text.split())
+def wc(t): return len(t.split())
 
 
-def secs(text: str) -> float:
-    return wc(text) / WPS
+# ── OpenRouter API ─────────────────────────────────────────────────────
+
+def get_api_key():
+    kf = os.path.expanduser('~/.hermes/openrouter-key')
+    if os.path.exists(kf):
+        with open(kf) as f:
+            key = f.read().strip()
+        if key and len(key) > 20: return key
+    key = os.environ.get('OPENROUTER_API_KEY', '')
+    if key and len(key) > 20: return key
+    print("ERROR: No API key. Saved to ~/.hermes/openrouter-key", file=sys.stderr)
+    sys.exit(1)
 
 
-def sentences(text: str) -> list[str]:
-    """Split text into sentences."""
-    parts = re.split(r'(?<=[.!?])\s+', text)
-    return [p.strip() for p in parts if p.strip()]
+def call_llm(model, system, prompt, api_key, retries=3):
+    payload = json.dumps({
+        'model': model,
+        'messages': [
+            {'role': 'system', 'content': system},
+            {'role': 'user', 'content': prompt},
+        ],
+        'max_tokens': 1500,
+        'temperature': 0.7,
+    }).encode()
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(
+                'https://openrouter.ai/api/v1/chat/completions',
+                data=payload,
+                headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                return json.loads(resp.read())['choices'][0]['message']['content'], None
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                wait = 30 * (attempt + 1)
+                print(f"  Rate limited. Waiting {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            return None, str(e)
+        except Exception as e:
+            return None, str(e)
+    return None, "Max retries exceeded"
 
 
-def take_sentences(text: str, max_words: int) -> str:
-    """Take complete sentences up to max_words."""
-    sents = sentences(text)
-    result = []
-    count = 0
-    for s in sents:
-        w = wc(s)
-        if count + w > max_words and result:
-            break
-        result.append(s)
-        count += w
-    return ' '.join(result)
+def parse_json(text):
+    if not text: return None, "empty"
+    m = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    if m: text = m.group(1)
+    else:
+        m = re.search(r'\{.*\}', text, re.DOTALL)
+        if m: text = m.group(0)
+    try: return json.loads(text), None
+    except json.JSONDecodeError as e:
+        return None, f"JSON parse error: {e}\nRaw: {text[:200]}"
 
 
-# ── Blog → TTS rewriting ────────────────────────────────────────────────
+# ── LLM Prompts ────────────────────────────────────────────────────────
 
-def rewrite_section_for_tts(heading: str, content: str) -> str:
-    """
-    Convert a blog section into broadcast-news voiceover script.
-    Strips blog-isms, restructures for spoken delivery.
-    """
-    text = clean_blog_markdown(content)
+SELECTOR_SYS = f"""You are a news editor for "Spaghetti Stories Daily" — a short-form AI news video series. Pick the single best story for a 30-45 second video short.
 
-    # Strip attribution lines (e.g. "Simon Willison's take: ...")
-    text = re.sub(r"^[\w\s'\"-]+take:\s*", '', text, flags=re.MULTILINE)
+Criteria:
+- Clear narrative arc (setup → conflict/twist → implication)
+- Surprising, controversial, or emotionally engaging
+- Conversational broadcast voice works naturally
+- Concrete details (names, numbers, quotes)
+- Avoids lists, benchmarks, or technical specs that need diagrams
 
-    # Remove "He's right." / "They're probably right." dangling refs
-    text = re.sub(r"^He's right\.\s*", '', text, flags=re.MULTILINE)
-    text = re.sub(r"^She's right\.\s*", '', text, flags=re.MULTILINE)
-    text = re.sub(r"^They're probably right\.\s*", '', text, flags=re.MULTILINE)
-
-    # Convert blog bold-label patterns to spoken transitions
-    replacements = [
-        (r'\*\*The pitch:\*\*', 'Here\'s the pitch.'),
-        (r'\*\*The problem:\*\*', 'The problem?'),
-        (r'\*\*The solution:\*\*', 'Their solution?'),
-        (r'\*\*The catch:\*\*', 'The catch.'),
-        (r'\*\*The real story:\*\*', 'The real story?'),
-        (r'\*\*The Pattern:\*\*', 'The Pattern.'),
-        (r'\*\*The deeper issue\?\*\*', 'The deeper issue?'),
-        (r'\*\*Why this matters:\*\*', 'Why this matters.'),
-        (r'\*\*Why this matters for builders:\*\*', 'Why this matters for you.'),
-        (r'\*\*The key design choice:\*\*', 'The key design choice?'),
-        (r'\*\*The tradeoff\?\*\*', 'The tradeoff?'),
-        (r'\*\*This wasn\'t a bug\.\*\*', 'This wasn\'t a bug.'),
-        (r'\*\*This is the first.*?\.\*\*', lambda m: m.group(0).replace('**', '')),
-    ]
-    for pattern, replacement in replacements:
-        if callable(replacement):
-            text = re.sub(pattern, replacement, text)
-        else:
-            text = re.sub(pattern, replacement, text)
-
-    # Remove image alt-text lines that leaked through
-    text = re.sub(r'^\s*!--.*?--\s*$', '', text, flags=re.MULTILINE)
-
-    # Clean up lines that are just bold labels without colons
-    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-
-    # Remove remaining markdown heading markers
-    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
-
-    # Strip leading/trailing whitespace per line, remove empties
-    lines = [l.strip() for l in text.splitlines()]
-    text = '\n'.join(l for l in lines if l.strip())
-
-    return text.strip()
+Respond with ONLY JSON:
+{{"selected_section_index": <int>, "selected_heading": "<exact heading>", "reason": "<1-2 sentences>", "hook": "<1-sentence cold open for the video>"}}"""
 
 
-# ── Clip Planning ──────────────────────────────────────────────────────
+SCRIPT_SYS = f"""You are a broadcast news writer for "Spaghetti Stories Daily". Write voiceover scripts for short AI news videos.
 
-def plan_clips_for_section(heading: str, rewritten: str, preset_key: str = 'standard') -> list[dict]:
-    """
-    Break a rewritten section into clips based on word budget per clip.
-    Returns list of clip dicts with script text.
-    """
-    preset = CLIP_PRESETS[preset_key]
-    max_words = preset['words']
-    total_words = wc(rewritten)
+HARD RULES:
+- Each clip is EXACTLY 10 seconds. {CLIP_WORDS} words MAX per clip. Never exceed {CLIP_WORDS}.
+- Confident, conversational news-anchor voice. Active voice. No filler. Every sentence earns its place.
+- Read it aloud — if it sounds weird spoken, rewrite it.
+- First clip = attention hook. Last clip = forward-looking button.
+- Each clip must be a complete standalone 10-second thought.
+- Visual notes in [brackets] suggest newscaster expression/gesture.
 
-    # If it fits in one clip, great
-    if total_words <= max_words * 1.3:  # 30% tolerance — we can stretch pacing
-        return [{
-            'clip_index': 1,
-            'heading': heading,
-            'script': rewritten,
-            'word_count': total_words,
-            'duration': preset['seconds'],
-            'extend': preset_key == 'extended',
-            'speaking_seconds': round(secs(rewritten), 1),
-        }]
-
-    # Split into multiple clips by sentences
-    all_sents = sentences(rewritten)
-    clips = []
-    clip_idx = 0
-    current_sents = []
-    current_words = 0
-
-    for sent in all_sents:
-        sent_w = wc(sent)
-
-        # If adding this sentence would overshoot and we have content, flush
-        if current_words + sent_w > max_words * 1.4 and current_sents:
-            clip_idx += 1
-            script = ' '.join(current_sents)
-            clips.append({
-                'clip_index': clip_idx,
-                'heading': f"{heading} (part {clip_idx})",
-                'script': script,
-                'word_count': current_words,
-                'duration': preset['seconds'],
-                'extend': preset_key == 'extended',
-                'speaking_seconds': round(secs(script), 1),
-            })
-            # Carry over: if this sentence is big, start new clip with it
-            current_sents = [sent]
-            current_words = sent_w
-        else:
-            current_sents.append(sent)
-            current_words += sent_w
-
-    # Flush last clip
-    if current_sents:
-        clip_idx += 1
-        script = ' '.join(current_sents)
-        if script.strip():
-            clips.append({
-                'clip_index': clip_idx,
-                'heading': f"{heading} (part {clip_idx})" if clip_idx > 1 else heading,
-                'script': script,
-                'word_count': current_words,
-                'duration': preset['seconds'],
-                'extend': preset_key == 'extended',
-                'speaking_seconds': round(secs(script), 1),
-            })
-
-    return clips
+Respond with ONLY JSON:
+{{"clips": [{{"clip_number": <int>, "duration": {CLIP_SECONDS}, "heading": "<label>", "script": "<exact text, {CLIP_WORDS} words max>", "visual_note": "<expression/gesture>", "word_count": <int>}}], "total_clips": <int>, "total_video_seconds": <int>, "total_word_count": <int>}}"""
 
 
-# ── Main Pipeline ───────────────────────────────────────────────────────
+def format_sections(sections):
+    parts = []
+    for s in sections:
+        c = clean(s['content'])
+        # Trim to first ~100 words to keep prompt manageable
+        words = c.split()
+        if len(words) > 120:
+            c = ' '.join(words[:120]) + '...'
+        parts.append(f"Section {s['index']}: {s['heading']}\n{c}")
+    return '\n\n'.join(parts)
 
-def process_post(filepath: str, preset: str = 'standard', max_clips: int = None,
-                 sections: list = None) -> dict:
-    with open(filepath, 'r') as f:
+
+# ── Pipeline ────────────────────────────────────────────────────────────
+
+def run_pipeline(filepath, target_secs, model, api_key):
+    with open(filepath) as f:
         raw = f.read()
 
-    fm = parse_frontmatter(raw)
-    all_sections = extract_sections(raw)
+    fm = parse_fm(raw)
+    sections = extract_sections(raw)
+    title = fm.get('title', 'Untitled')
+    date = str(fm.get('date', ''))
 
-    # Filter to specific sections if requested
-    if sections:
-        selected = []
-        for s in sections:
-            if isinstance(s, int):
-                if 1 <= s <= len(all_sections):
-                    selected.append(all_sections[s - 1])
-            else:
-                # Match by heading substring
-                for sec in all_sections:
-                    if s.lower() in sec['heading'].lower():
-                        selected.append(sec)
-                        break
-        all_sections = selected
+    print(f"Post: {title}", file=sys.stderr)
+    print(f"Sections: {len(sections)}", file=sys.stderr)
 
-    preset_cfg = CLIP_PRESETS[preset]
-    all_clips = []
+    # Step 1: Story Selection
+    print(f"\n[1/2] Selecting best story (model: {model})...", file=sys.stderr)
+    sel_prompt = f"Title: {title}\nDate: {date}\n\nSections:\n{format_sections(sections)}\n\nPick the best story for a ~{target_secs}s video. Respond ONLY with JSON."
+    raw1, err1 = call_llm(model, SELECTOR_SYS, sel_prompt, api_key)
+    if err1:
+        print(f"  ERROR: {err1}", file=sys.stderr)
+        return None
 
-    for sec in all_sections:
-        rewritten = rewrite_section_for_tts(sec['heading'], sec['content'])
-        if not rewritten or wc(rewritten) < 5:
-            continue
-        sec_clips = plan_clips_for_section(sec['heading'], rewritten, preset)
-        all_clips.extend(sec_clips)
+    sel, perr1 = parse_json(raw1)
+    if perr1:
+        print(f"  PARSE ERROR: {perr1}", file=sys.stderr)
+        return None
 
-    # Apply max_clips limit
-    if max_clips and len(all_clips) > max_clips:
-        all_clips = all_clips[:max_clips]
+    print(f"  → Section {sel['selected_section_index']}: {sel['selected_heading'][:60]}", file=sys.stderr)
+    print(f"  → {sel['reason'][:100]}", file=sys.stderr)
 
-    total_speech = sum(c['speaking_seconds'] for c in all_clips)
-    total_video = sum(c['duration'] for c in all_clips)
+    # Find selected section content
+    sel_idx = sel['selected_section_index']
+    story_text = ''
+    for s in sections:
+        if s['index'] == sel_idx:
+            story_text = clean(s['content'])
+            break
+    if not story_text:
+        story_text = sel['selected_heading']
+
+    # Step 2: Script Writing
+    n_clips = target_secs // CLIP_SECONDS
+    scr_prompt = f"Write {n_clips} broadcast voiceover clips (each 10s, {CLIP_WORDS} words MAX) for:\n\n{sel['selected_heading']}\n\n{story_text}\n\n{n_clips} clips. Cold open hook first. Forward-looking button last. {CLIP_WORDS} words HARD MAX per clip. Each clip standalone. Respond ONLY with JSON."
+
+    print(f"\n[2/2] Writing script ({n_clips} clips, ~{target_secs}s)...", file=sys.stderr)
+    raw2, err2 = call_llm(model, SCRIPT_SYS, scr_prompt, api_key)
+    if err2:
+        print(f"  ERROR: {err2}", file=sys.stderr)
+        return None
+
+    scr, perr2 = parse_json(raw2)
+    if perr2:
+        print(f"  PARSE ERROR: {perr2}", file=sys.stderr)
+        return None
+
+    clips = scr.get('clips', [])
+    over = sum(1 for c in clips if c.get('word_count', 0) > CLIP_WORDS)
+    print(f"  → {len(clips)} clips, {scr.get('total_word_count', 0)} words, {over} over limit", file=sys.stderr)
 
     return {
-        'source_file': os.path.basename(filepath),
-        'title': fm.get('title', 'Untitled'),
-        'date': str(fm.get('date', '')),
-        'author': fm.get('author', ''),
-        'tags': fm.get('tags', []),
-        'excerpt': fm.get('excerpt', ''),
-        'preset': preset_cfg['label'],
-        'total_clips': len(all_clips),
-        'total_video_seconds': total_video,
-        'total_speech_seconds': round(total_speech, 1),
-        'clips': all_clips,
+        'title': title,
+        'date': date,
+        'selection': sel,
+        'script': scr,
     }
 
 
-def find_latest_post(posts_dir: str) -> str:
-    pattern = os.path.join(posts_dir, '*.md')
-    files = glob.glob(pattern)
-    if not files:
-        sys.exit(f"No .md files found in {posts_dir}")
-    files.sort(reverse=True)
-    return files[0]
+def format_output(data):
+    sel = data['selection']
+    scr = data['script']
+    clips = scr.get('clips', [])
 
+    lines = [
+        f"# {data['title']}",
+        f"Date: {data['date']}",
+        "",
+        f"## Selected Story: {sel['selected_heading']}",
+        f"Reason: {sel['reason']}",
+        f"",
+        f"Clips: {len(clips)} | Video: {scr.get('total_video_seconds', 0)}s | Words: {scr.get('total_word_count', 0)}",
+        "",
+        "═" * 60,
+        "",
+    ]
 
-def format_output(data: dict, fmt: str = 'yaml') -> str:
-    """Format output for clipboard/paste into Grok Imagine."""
-    if fmt == 'txt':
-        # Plain text: ready to paste into Grok Imagine
-        lines = [
-            f"# {data['title']}",
-            f"Preset: {data['preset']}",
-            f"Clips: {data['total_clips']} | Video: {data['total_video_seconds']}s | Speech: {data['total_speech_seconds']}s",
+    for c in clips:
+        lines += [
+            f"── CLIP {c['clip_number']} │ {c['heading']} │ {c['duration']}s ──",
+            f"Words: {c['word_count']} | Max: {CLIP_WORDS}",
+            f"Visual: {c.get('visual_note', 'Newscaster at desk')}",
+            "",
+            c['script'],
             "",
         ]
-        for clip in data['clips']:
-            extend_note = " [+ EXTEND]" if clip['extend'] else ""
-            lines.extend([
-                f"── Clip {clip['clip_index']} ({clip['duration']}s{extend_note}) ──",
-                f"Words: {clip['word_count']} | Speaking time: {clip['speaking_seconds']}s",
-                "",
-                clip['script'],
-                "",
-            ])
-        return '\n'.join(lines)
-    else:
-        # YAML
-        try:
-            import yaml
-            return yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        except ImportError:
-            return json.dumps(data, indent=2, ensure_ascii=False)
+
+    lines += [
+        "═" * 60,
+        "",
+        "## Production Checklist",
+        "",
+    ]
+    for c in clips:
+        lines.append(f"- [ ] Clip {c['clip_number']}: {c['heading']} ({c['duration']}s, {c['word_count']}w)")
+    lines += [
+        "",
+        "# After all clips:",
+        "- [ ] Download each clip from Grok Imagine",
+        f"- [ ] ffmpeg concat: `ffmpeg {' '.join('-i clip' + str(c['clip_number']) + '.mp4' for c in clips)} -filter_complex concat=n={len(clips)}:v=1:a=1 -movflags faststart output.mp4`",
+        "- [ ] Add intro/outro card",
+        "- [ ] Export 9:16 vertical (1080x1920)",
+    ]
+    return '\n'.join(lines)
+
+
+# ── CLI ─────────────────────────────────────────────────────────────────
+
+def find_latest(d):
+    f = sorted(glob.glob(os.path.join(d, '*.md')), reverse=True)
+    return f[0] if f else None
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Spaghetti Stories → Grok Imagine script generator')
-    parser.add_argument('input', help='Post file path, "latest", or _posts directory')
-    parser.add_argument('--preset', '-p', choices=['brief', 'standard', 'extended'],
-                        default='standard', help='Clip duration preset (default: standard)')
-    parser.add_argument('--max-clips', '-m', type=int, help='Limit total number of clips')
-    parser.add_argument('--sections', '-s', nargs='+', help='Section indices (1-based) or heading substrings')
-    parser.add_argument('--output', '-o', help='Output file (default: stdout)')
-    parser.add_argument('--format', '-f', choices=['yaml', 'txt'], default='txt',
-                        help='Output format (default: txt for pasting)')
-    parser.add_argument('--posts-dir', default=os.path.expanduser('~/projects/SpaghettiStories/_posts'))
-    args = parser.parse_args()
+    p = argparse.ArgumentParser(description='Spaghetti Stories → Grok Imagine script generator')
+    p.add_argument('input', help='Post file, "latest", or _posts directory')
+    p.add_argument('-t', '--target', type=int, default=30, help='Target video seconds (default: 30)')
+    p.add_argument('-m', '--model', default=DEFAULT_MODEL, help=f'OpenRouter model (default: {DEFAULT_MODEL})')
+    p.add_argument('-o', '--output', help='Output file')
+    p.add_argument('--posts-dir', default=os.path.expanduser('~/projects/SpaghettiStories/_posts'))
+    args = p.parse_args()
 
     if args.input == 'latest':
-        filepath = find_latest_post(args.posts_dir)
+        fp = find_latest(args.posts_dir)
     elif os.path.isdir(args.input):
-        filepath = find_latest_post(args.input)
+        fp = find_latest(args.input)
     else:
-        filepath = args.input
+        fp = args.input
 
-    if not os.path.exists(filepath):
-        sys.exit(f"File not found: {filepath}")
+    if not fp or not os.path.exists(fp):
+        sys.exit(f"Not found: {fp or args.input}")
 
-    # Parse section args
-    sec_filter = None
-    if args.sections:
-        sec_filter = []
-        for s in args.sections:
-            try:
-                sec_filter.append(int(s))
-            except ValueError:
-                sec_filter.append(s)
+    api_key = get_api_key()
+    result = run_pipeline(fp, args.target, args.model, api_key)
+    if not result:
+        sys.exit("Pipeline failed")
 
-    print(f"Processing: {filepath}", file=sys.stderr)
-    result = process_post(filepath, args.preset, args.max_clips, sec_filter)
-
-    print(f"Title: {result['title']}", file=sys.stderr)
-    print(f"Preset: {result['preset']}", file=sys.stderr)
-    print(f"Clips: {result['total_clips']}", file=sys.stderr)
-    print(f"Total video: {result['total_video_seconds']}s | Speech: {result['total_speech_seconds']}s\n", file=sys.stderr)
-
-    output = format_output(result, args.format)
+    output = format_output(result)
 
     if args.output:
         with open(args.output, 'w') as f:
             f.write(output)
-        print(f"Written to: {args.output}", file=sys.stderr)
+        print(f"\nWritten: {args.output}", file=sys.stderr)
     else:
         print(output)
 

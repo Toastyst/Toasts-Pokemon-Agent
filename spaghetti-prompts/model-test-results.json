@@ -1,0 +1,106 @@
+{
+  "Qwen3 Next 80B": {
+    "model": "qwen/qwen3-80b-a3b-instruct",
+    "label": "Qwen3 Next 80B",
+    "select_time": 0.2,
+    "select_error": "HTTP Error 400: Bad Request"
+  },
+  "Gemma 4 31B": {
+    "model": "google/gemma-3-27b-it",
+    "label": "Gemma 4 31B",
+    "select_time": 11.2,
+    "select_result": {
+      "selected_section_index": 2,
+      "selected_heading": "NVIDIA Cosmos 3 — The Open Model That Thinks in the Physical World",
+      "reason": "This story has a clear and exciting narrative—a groundbreaking open-source model (Cosmos 3) that can understand the physical world, with a bold claim from Jensen Huang. It's surprising, potentially impactful, and translates well to a conversational tone. The phrase 'thinks in the physical world' is instantly engaging and doesn't require complex visuals to understand. It's more emotionally resonant than the other sections and avoids getting bogged down in benchmarks.",
+      "hook": "Forget AI that just *sees* the world – NVIDIA just unveiled an open-source model that can actually *understand* how it *works*."
+    },
+    "script_time": 5.8,
+    "script_result": {
+      "clips": [
+        {
+          "clip_number": 1,
+          "duration": 10,
+          "heading": "Cosmos 3 - Hook",
+          "script": "Imagine an AI that *understands* the real world, not just pixels on a screen. NVIDIA just released a model aiming to do exactly that. Stay tuned.",
+          "visual_note": "[Intrigued, slightly leaning forward]",
+          "word_count": 22
+        },
+        {
+          "clip_number": 2,
+          "duration": 10,
+          "heading": "Cosmos 3 - Key Feature",
+          "script": "Cosmos 3 is the first fully open ‘omnimodel.’ It processes text, images, video, sound *and* understands physics. A huge leap for AI robotics.",
+          "visual_note": "[Confident, gesturing to emphasize 'omnimodel']",
+          "word_count": 24
+        },
+        {
+          "clip_number": 3,
+          "duration": 10,
+          "heading": "Cosmos 3 - Wrap",
+          "script": "NVIDIA claims Cosmos 3 dramatically speeds up physical AI development. Jensen Huang predicts a 'big bang' is coming. This changes everything.",
+          "visual_note": "[Direct to camera, determined expression]",
+          "word_count": 22
+        }
+      ],
+      "total_clips": 3,
+      "total_video_seconds": 30,
+      "total_word_count": 68
+    }
+  },
+  "Llama 3.3 70B": {
+    "model": "meta-llama/llama-3.3-70b-instruct",
+    "label": "Llama 3.3 70B",
+    "select_time": 4.1,
+    "select_result": {
+      "selected_section_index": 2,
+      "selected_heading": "NVIDIA Cosmos 3 — The Open Model That Thinks in the Physical World",
+      "reason": "It has a clear narrative arc with a surprising and emotionally engaging announcement from NVIDIA, along with a concrete quote from Jensen Huang and specific details about the model's capabilities",
+      "hook": "Imagine a world where robots can learn in days instead of months, thanks to NVIDIA's revolutionary new AI model, Cosmos 3"
+    },
+    "script_time": 16.7,
+    "script_result": {
+      "clips": [
+        {
+          "clip_number": 1,
+          "duration": 10,
+          "heading": "Intro",
+          "script": "NVIDIA Cosmos 3: AI's new frontier",
+          "visual_note": "[excited raise]",
+          "word_count": 6
+        },
+        {
+          "clip_number": 2,
+          "duration": 10,
+          "heading": "Key Point",
+          "script": "Trains in days, not months",
+          "visual_note": "[impressed nod]",
+          "word_count": 5
+        },
+        {
+          "clip_number": 3,
+          "duration": 10,
+          "heading": "Conclusion",
+          "script": "Physical AI's big bang is near",
+          "visual_note": "[forward lean]",
+          "word_count": 5
+        }
+      ],
+      "total_clips": 3,
+      "total_video_seconds": 30,
+      "total_word_count": 16
+    }
+  },
+  "Hermes 3 405B": {
+    "model": "nousresearch/hermes-3-405b",
+    "label": "Hermes 3 405B",
+    "select_time": 0.1,
+    "select_error": "HTTP Error 400: Bad Request"
+  },
+  "Venice Uncensored": {
+    "model": "venice/uncensored",
+    "label": "Venice Uncensored",
+    "select_time": 0.1,
+    "select_error": "HTTP Error 404: Not Found"
+  }
+}
