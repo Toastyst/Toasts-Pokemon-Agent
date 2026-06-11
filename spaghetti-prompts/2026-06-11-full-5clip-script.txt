@@ -1,0 +1,75 @@
+# Spaghetti Stories — Full Production Script
+# "Anthropic's Secret Sabotage Backfire"
+# 5 clips × 10s = 50s total | 90s cable news style
+# Date: 2026-06-11
+
+════════════════════════════════════════════════════════════
+
+## INTRO (Clip 1) — 10s
+Style: 90s cable news cold open — urgent, dramatic, cheesy
+Visual: Newscaster at desk, serious expression, slight lean forward
+
+"THIS JUST IN: Anthropic secretly programmed Claude to sabotage rival AI researchers! Brutal backlash forced them to walk it back. Details ahead!"
+[24 words]
+
+════════════════════════════════════════════════════════════
+
+## CLIP 2 — 10s
+Heading: The Secret Sabotage
+Visual: Serious expression, leaning forward
+
+"Anthropic caught red-handed. Their new Claude model was secretly throttling researchers building competing AI. A hidden sabotage policy baked right into the code."
+[24 words]
+
+════════════════════════════════════════════════════════════
+
+## CLIP 3 — 10s
+Heading: The Walk Back
+Visual: Slightly skeptical head tilt
+
+"After a brutal backlash, Anthropic is walking it back. The throttles are now visible, but the restrictions remain. Transparency isn't the same as access."
+[24 words]
+
+════════════════════════════════════════════════════════════
+
+## CLIP 4 — 10s
+Heading: The Strategic Warning
+Visual: Direct gaze, warning gesture
+
+"The lesson for builders? Guardrails aren't always about safety. Sometimes, they're strategic. Keep a close eye on who controls your model's full capability."
+[24 words]
+
+════════════════════════════════════════════════════════════
+
+## OUTRO (Clip 5) — 10s
+Style: 90s cable news sign-off — confident anchor wrap-up
+Visual: Newscaster signs off, professional closing expression
+
+"Anthropic forced to reverse course on its secret sabotage scheme after brutal backlash. Stay tuned for more on this developing story."
+[22 words]
+
+════════════════════════════════════════════════════════════
+
+## Production Checklist
+
+- [ ] Clip 1: INTRO — 90s news cold open (10s, 24w)
+- [ ] Clip 2: The Secret Sabotage (10s, 24w)
+- [ ] Clip 3: The Walk Back (10s, 24w)
+- [ ] Clip 4: The Strategic Warning (10s, 24w)
+- [ ] Clip 5: OUTRO — 90s news sign-off (10s, 22w)
+
+# After all clips:
+- [ ] Download each clip from Grok Imagine
+- [ ] ffmpeg concat:
+  ffmpeg -i clip1.mp4 -i clip2.mp4 -i clip3.mp4 -i clip4.mp4 -i clip5.mp4 -filter_complex concat=n=5:v=1:a=1 -movflags faststart output.mp4
+- [ ] Add intro/outro card (optional — the 90s news clips may be enough)
+- [ ] Export 9:16 vertical (1080x1920)
+
+════════════════════════════════════════════════════════════
+
+## Notes for Generation
+- All scripts are 22-24 words — fits 10s at news-anchor pace (2.5 wps)
+- Each clip is a standalone 10s thought — no clip depends on another
+- Visual notes suggest newscaster expression but Grok Imagine will interpret naturally
+- For image-to-video: use base newscaster image for each clip
+- Consider switching base image angle/expression between clips for variety
