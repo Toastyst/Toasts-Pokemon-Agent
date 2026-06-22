@@ -186,6 +186,7 @@
             var isLegend = line.trim() === '' ||
                 line.trim().startsWith('@ you') ||
                 line.trim().startsWith('S stairs') ||
+                line.trim().startsWith('W warp') ||
                 line.trim().startsWith('● item') ||
                 line.trim().startsWith('Legend:');
             if (isLegend) {

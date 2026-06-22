@@ -405,6 +405,7 @@ def render_ascii_map(
     if legend:
         lines.append("")
         lines.append("@ you   . walkable   # blocked")
-        lines.append("S stairs/warp  D door/doormat  W warp-pad/hole")
+        lines.append("S stairs/warp  D door/doormat")
+        lines.append("W warp-pad/hole")
         lines.append("● item  ☻ NPC")
     return "\n".join(lines)
