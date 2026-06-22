@@ -275,8 +275,9 @@ def build_special_tiles(
             # Method 1: Check if player is standing on a warp entry
             if (abs_y, abs_x) in warp_positions:
                 w = warp_positions[(abs_y, abs_x)]
-                # dest_map 255 = doormat/exit (door), anything else = stairs/warp
-                wtype = "door" if w.get("dest_map") == 255 else "warp"
+                # dest_map 255 = doormat/exit (door)
+                # dest_map other = stairs between floors
+                wtype = "door" if w.get("dest_map") == 255 else "stairs"
                 special[label] = {
                     "type": wtype,
                     "dest_map": w["dest_map"],
