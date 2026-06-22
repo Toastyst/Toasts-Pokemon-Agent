@@ -206,7 +206,7 @@ def _get_state_dict() -> dict:
         if _config and _config.game_type == "red" and not (
             state.get("battle") or {}
         ).get("in_battle"):
-            from pokemon_agent.collision import (
+            from pokemon_agent.server.collision import (
                 build_collision_grid,
                 build_special_tiles,
                 render_ascii_map,
@@ -1327,7 +1327,7 @@ async def map_ascii():
     _ensure_emulator()
     try:
         def _ascii() -> str:
-            from pokemon_agent.collision import (
+            from pokemon_agent.server.collision import (
                 build_collision_grid,
                 build_special_tiles,
                 render_ascii_map,
