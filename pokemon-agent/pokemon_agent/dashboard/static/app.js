@@ -190,8 +190,33 @@
                 line.trim().startsWith('Legend:');
             if (isLegend) {
                 pastGrid = true;
+                // Render legend line character-by-character to match pre-commit
+                // behavior: grid symbols (@.#SDW●☻) get color spans, text chars
+                // (letters/spaces) get dim — producing a color-coded key.
                 if (line.trim() !== '') {
-                    html += '<span style="color:var(--paper-faint);font-size:9px">' + line.trim() + '</span>\n';
+                    for (var fi = 0; fi < line.length; fi++) {
+                        var fh = line[fi];
+                        if (fh === '#' || fh === '▦') {
+                            html += '<span class="cg-wall">' + fh + '</span>';
+                        } else if (fh === '.' || fh === ' ') {
+                            html += '<span class="cg-walk">' + fh + '</span>';
+                        } else if (fh === '@') {
+                            html += '<span class="cg-player">' + fh + '</span>';
+                        } else if (fh === '☻') {
+                            html += '<span class="cg-npc">' + fh + '</span>';
+                        } else if (fh === '●') {
+                            html += '<span class="cg-item">' + fh + '</span>';
+                        } else if (fh === 'D') {
+                            html += '<span class="cg-door">' + fh + '</span>';
+                        } else if (fh === 'S') {
+                            html += '<span class="cg-stairs">' + fh + '</span>';
+                        } else if (fh === 'W') {
+                            html += '<span class="cg-warp">' + fh + '</span>';
+                        } else {
+                            html += '<span style="color:var(--paper-faint)">' + fh + '</span>';
+                        }
+                    }
+                    html += '\n';
                 }
                 continue;
             }
