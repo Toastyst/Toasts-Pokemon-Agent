@@ -467,19 +467,17 @@ body::before {
 .console-body {
     flex: 1;
     min-height: 0;
+    overflow: hidden;
     display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
     gap: 1px;
     background: var(--hair);
-    overflow-x: auto;
-    overflow-y: hidden;
 }
 .console-left {
-    flex: 0 0 220px;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     min-width: 0;
+    max-width: 280px;
     background: var(--ink-2);
     border-right: 1px solid var(--hair);
 }
@@ -495,8 +493,7 @@ body::before {
     flex-direction: column;
     padding: 6px 10px;
     gap: 4px;
-    flex: 1;
-    min-height: 0;
+    height: 100%;
     overflow: hidden;
 }
 .collision-head {
