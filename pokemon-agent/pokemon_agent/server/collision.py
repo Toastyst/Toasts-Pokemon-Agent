@@ -275,8 +275,10 @@ def build_special_tiles(
             # Method 1: Check if player is standing on a warp entry
             if (abs_y, abs_x) in warp_positions:
                 w = warp_positions[(abs_y, abs_x)]
+                # dest_map 255 = doormat/exit (door), anything else = stairs/warp
+                wtype = "door" if w.get("dest_map") == 255 else "warp"
                 special[label] = {
-                    "type": "warp",
+                    "type": wtype,
                     "dest_map": w["dest_map"],
                     "dest_name": w["dest_name"],
                     "source": "ram",
@@ -395,7 +397,7 @@ def render_ascii_map(
                 elif stype in ("warp_pad", "warp_hole"):
                     cells.append(" W ")
                 elif stype == "warp":
-                    cells.append(" S ")
+                    cells.append(" W ")
                 else:
                     cells.append(" ? ")
             else:
