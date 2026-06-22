@@ -406,6 +406,5 @@ def render_ascii_map(
         lines.append("")
         lines.append("@ you   . walkable   # blocked")
         lines.append("S stairs/warp  D door/doormat")
-        lines.append("W warp-pad/hole")
-        lines.append("● item  ☻ NPC")
+        lines.append("W warp-pad/hole  ● item  ☻ NPC")
     return "\n".join(lines)
