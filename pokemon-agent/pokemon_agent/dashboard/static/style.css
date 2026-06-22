@@ -549,6 +549,43 @@ body::before {
 .collision-grid .cg-item  { color: var(--cg-item); }
 .collision-grid .cg-door  { color: var(--cg-door); }
 .collision-grid .cg-stairs { color: var(--cg-stairs); }
+
+/* collision key under the grid */
+.collision-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    padding: 4px 2px 2px;
+    border-top: 1px solid var(--hair);
+    flex-shrink: 0;
+}
+.ck-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.ck-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    font-size: 0;
+    line-height: 0;
+}
+.ck-swatch.cg-player { background: var(--cg-player); }
+.ck-swatch.cg-walk   { background: var(--cg-walk); }
+.ck-swatch.cg-wall   { background: var(--cg-wall); }
+.ck-swatch.cg-door   { background: var(--cg-door); }
+.ck-swatch.cg-stairs { background: var(--cg-stairs); }
+.ck-swatch.cg-warp   { background: var(--cg-warp); }
+.ck-swatch.cg-item   { background: var(--cg-item); }
+.ck-swatch.cg-npc    { background: var(--cg-npc); }
+.ck-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--paper-faint);
+    letter-spacing: .02em;
+}
 .console-stream {
     background: var(--ink);
     overflow-y: auto;
