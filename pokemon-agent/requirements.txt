@@ -1,0 +1,24 @@
+# Core server
+fastapi>=0.110
+uvicorn[standard]>=0.30
+python-dotenv>=1.0
+pyyaml>=6.0
+pydantic>=2.0
+
+# Emulator
+pyboy>=2.0
+PySDL2>=0.9
+
+# HTTP client
+httpx>=0.27
+requests>=2.31
+
+# Async
+aiofiles>=23.0
+anyio>=4.0
+
+# Image processing (screenshots)
+pillow>=10.0
+
+# Optional: numpy for collision map processing
+numpy>=2.0

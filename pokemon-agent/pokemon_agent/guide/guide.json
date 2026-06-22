@@ -1,0 +1,418 @@
+{
+  "game": "Pokemon Red",
+  "format_version": "2.0",
+  "description": "State-driven walkthrough guide. Each objective has start_conditions (when the guide may pick it) and completion_conditions (when critique marks it done).",
+  "steps": [
+    {
+      "id": "EXIT_REDS_HOUSE_2F",
+      "description": "Exit Red's House 2F via the stairs to 1F",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Red's House 2F",
+        "flags.has_pokedex": false,
+        "party": "empty"
+      },
+      "completion_conditions": {
+        "map_name": "Red's House 1F"
+      },
+      "hints": [
+        "Stairs are at the top-right of the room (approximately x=7, y=1)",
+        "Walk onto the S tile — it's a regular walkable tile. The warp fires automatically when you step on it.",
+        "After stepping on the stairs, wait a frame or two for the transition to fire."
+      ],
+      "target_position": [7, 1]
+    },
+    {
+      "id": "EXIT_REDS_HOUSE_1F",
+      "description": "Exit Red's House 1F to Pallet Town via the south doormat",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Red's House 1F",
+        "flags.has_pokedex": false,
+        "party": "empty"
+      },
+      "completion_conditions": {
+        "map_name": "Pallet Town"
+      },
+      "hints": [
+        "Navigate to the S tiles (doormats) at the bottom of the room",
+        "Stand on the S tile, then keep walking south — the warp fires when you step off the tile in the exit direction.",
+        "The S tile is regular floor. The exit triggers by walking south off it, not by stepping onto it."
+      ],
+      "target_position": [3, 7]
+    },
+    {
+      "id": "WALK_TO_OAK_TRIGGER",
+      "description": "Navigate to the north edge of Pallet Town to trigger the Oak encounter",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Pallet Town",
+        "flags.has_pokedex": false,
+        "party": "empty"
+      },
+      "completion_conditions": {
+        "map_name": "Oak's Lab"
+      },
+      "hints": [
+        "Navigate around the buildings to reach the north edge of the map.",
+        "The passage between buildings is at x=8 — go right from the entry point, then navigate north through the gap.",
+        "Grass tiles at y=1 (around x=10-11) trigger Oak's encounter.",
+        "Avoid the S tile at (5,5) which leads back to Red's House."
+      ],
+      "target_position": [10, 1]
+    },
+    {
+      "id": "CHOOSE_STARTER",
+      "description": "Pick your first Pokemon! There are three Poke Balls on the table. Check each one to see what's inside, then choose the one you want.",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Oak's Lab",
+        "party": "empty"
+      },
+      "completion_conditions": {
+        "party": "nonempty"
+      },
+      "hints": [
+        "★ THIS IS IT — your first Pokemon! The most exciting moment in the game!",
+        "There are 3 Poke Balls on the table. The GPS will guide you to each one.",
+        "At each ball: face toward it, press A, read the dialog to see what Pokemon is inside.",
+        "If it's NOT the one you want, press B to say NO. The dialog will close.",
+        "When you find the one YOU want, press A to say YES!",
+        "After saying YES, press B to advance through Oak's narration. Press B to skip nickname. If all balls have been checked move to the tile below the one that contains the starter Pokemon you want and press A."
+      ]
+    },
+    {
+      "id": "RIVAL_BATTLE_1",
+      "description": "Defeat your rival's Pokemon in the first battle",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Oak's Lab",
+        "party": "nonempty",
+        "battle.in_battle": false
+      },
+      "completion_conditions": {
+        "battle.in_battle": false
+      },
+      "hints": [
+        "Walk south toward the exit door. The rival will block your path and challenge you.",
+        "Battle: use your starter's level 5 move (Tackle/Scratch/Vine Whip/Water Gun). Keep HP above 5.",
+        "After winning, Oak tells you to go to Viridian City Mart to pick up his parcel."
+      ]
+    },
+    {
+      "id": "EXIT_OAKS_LAB",
+      "description": "Leave Oak's Lab and return to Pallet Town",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Oak's Lab",
+        "party": "nonempty",
+        "battle.in_battle": false
+      },
+      "completion_conditions": {
+        "map_name": "Pallet Town"
+      },
+      "hints": [
+        "Walk south through the lab to the exit doormat at the bottom.",
+        "The exit is at the south wall — stand on the doormat tile, then continue walking south to trigger the warp.",
+        "You'll arrive in Pallet Town."
+      ]
+    },
+    {
+      "id": "ROUTE_1_NORTH",
+      "description": "Leave Pallet Town and travel north on Route 1 to Viridian City",
+      "category": "story",
+      "start_conditions": {
+        "party": "nonempty",
+        "flags.has_pokedex": false
+      },
+      "completion_conditions": {
+        "map_name": "Viridian City"
+      },
+      "hints": [
+        "Head north through Pallet Town to Route 1, then continue north to Viridian City.",
+        "Route 1 has wild Pidgey and Rattata — they are weak, you can battle or avoid."
+      ]
+    },
+    {
+      "id": "VIRIDIAN_CENTER",
+      "description": "Heal at the Viridian City Pokemon Center",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Viridian City",
+        "party": "nonempty"
+      },
+      "completion_conditions": {
+        "map_name": "Viridian Pokecenter",
+        "party": "health=100%"
+      },
+      "hints": [
+        "The Pokemon Center is in the southwest part of Viridian City, directly off route 1.",
+        "Its probably the first building and warp you find in town.",
+        "Go inside and walk north toward the counter. Look for the NPC nurse behind the counter.",
+        "Face the nurse and press A to interact. Advance through her dialog (press A) until your Pokemon are healed.",
+        "After healing, walk south to the doormat and press down to exit."
+      ]
+    },
+    {
+      "id": "VIRIDIAN_MART",
+      "description": "Get Oak's Parcel from the Viridian City Mart",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Viridian City",
+        "party": "nonempty"
+      },
+      "completion_conditions": {
+        "flags.has_oaks_parcel": true
+      },
+      "hints": [
+        "The Mart is in the southeast part of Viridian City.",
+        "Go inside and talk to the clerk behind the counter.",
+        "The clerk gives you Oak's Parcel.",
+        "After this, has_oaks_parcel becomes true."
+      ]
+    },
+    {
+      "id": "DELIVER_PARCEL",
+      "description": "Deliver Oak's Parcel to Professor Oak in Pallet Town",
+      "category": "story",
+      "start_conditions": {
+        "flags.has_oaks_parcel": true,
+        "party": "nonempty"
+      },
+      "completion_conditions": {
+        "flags.has_pokedex": true
+      },
+      "hints": [
+        "Travel south from Viridian City through Route 1 to Pallet Town.",
+        "Go to Oak's Lab in Pallet Town.",
+        "Talk to Oak inside the lab (face him, press A).",
+        "He takes the parcel and gives you the Pokedex!",
+        "After delivery: Mart items unlock, Viridian north exit opens, trading enabled."
+      ]
+    },
+    {
+      "id": "VIRIDIAN_FOREST",
+      "description": "Navigate through Viridian Forest to reach Pewter City",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Viridian City",
+        "flags.has_pokedex": true,
+        "badge_count": 0
+      },
+      "completion_conditions": {
+        "map_name": "Pewter City"
+      },
+      "hints": [
+        "Head north from Viridian City to Viridian Forest.",
+        "Forest has Bug-type Pokemon (Caterpie, Weedle) — good for grinding.",
+        "Navigate through the forest using collision map.",
+        "Exit north to Pewter City.",
+        "Train your Pokemon to at least level 10-12 before the gym."
+      ]
+    },
+    {
+      "id": "BOULDER_BADGE",
+      "description": "Defeat Brock at Pewter Gym to earn the Boulder Badge",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Pewter City",
+        "flags.has_pokedex": true,
+        "badge_count": 0
+      },
+      "completion_conditions": {
+        "badge_count": 1
+      },
+      "hints": [
+        "Pewter Gym is in the center of town.",
+        "Brock uses Rock-type Pokemon (Geodude Lv12, Onix Lv14).",
+        "Fire moves are NOT super effective against Rock in Gen 1 (bug).",
+        "Water moves (if you chose Squirtle) are super effective.",
+        "If you chose Charmander, use Scratch — it still works.",
+        "Growl to lower enemy Attack, then attack.",
+        "After winning, receive Boulder Badge and TM34 (Bide)."
+      ]
+    },
+    {
+      "id": "ROUTE_3",
+      "description": "Travel Route 3 to Mt. Moon",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Pewter City",
+        "badge_count": 1
+      },
+      "completion_conditions": {
+        "map_name": "Mt. Moon"
+      },
+      "hints": [
+        "Head east from Pewter City to Route 3.",
+        "Route 3 has stronger wild Pokemon — be prepared.",
+        "Train your Pokemon before entering Mt. Moon."
+      ]
+    },
+    {
+      "id": "MT_MOON",
+      "description": "Navigate through Mt. Moon",
+      "category": "story",
+      "start_conditions": {
+        "map_name": "Mt. Moon",
+        "badge_count": 1
+      },
+      "completion_conditions": {
+        "map_name": "Route 4"
+      },
+      "hints": [
+        "Mt. Moon is a cave with Zubat, Geodude, and Clefairy.",
+        "Navigate through the cave using collision map.",
+        "Exit to Route 4 on the east side."
+      ]
+    },
+    {
+      "id": "CASCADE_BADGE",
+      "description": "Defeat Misty at Cerulean Gym to earn the Cascade Badge",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Cerulean City",
+        "badge_count": 1
+      },
+      "completion_conditions": {
+        "badge_count": 2
+      },
+      "hints": [
+        "Cerulean City is north of Route 4.",
+        "Misty uses Water-type Pokemon (Staryu Lv18, Starmie Lv21).",
+        "Electric moves are super effective (if you caught a Pikachu).",
+        "Grass moves (Bulbasaur) are also super effective.",
+        "After winning, receive Cascade Badge and TM11 (Water Pulse)."
+      ]
+    },
+    {
+      "id": "THUNDER_BADGE",
+      "description": "Defeat Lt. Surge at Vermilion Gym to earn the Thunder Badge",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Vermilion City",
+        "badge_count": 2
+      },
+      "completion_conditions": {
+        "badge_count": 3
+      },
+      "hints": [
+        "Vermilion City is south of Cerulean via Route 6.",
+        "Lt. Surge uses Electric-type Pokemon (Voltorb, Pikachu, Raichu).",
+        "Ground moves are super effective but rare in Gen 1.",
+        "Use physical attacks — Raichu is fast and hits hard."
+      ]
+    },
+    {
+      "id": "RAINBOW_BADGE",
+      "description": "Defeat Erika at Celadon Gym to earn the Rainbow Badge",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Celadon City",
+        "badge_count": 3
+      },
+      "completion_conditions": {
+        "badge_count": 4
+      },
+      "hints": [
+        "Celadon City is west of Vermilion via Route 7.",
+        "Erika uses Grass-type Pokemon (Victreebel, Tangela, Vileplume).",
+        "Fire moves are super effective (Charmander line).",
+        "Ice and Flying moves also work well."
+      ]
+    },
+    {
+      "id": "SOUL_BADGE",
+      "description": "Defeat Koga at Fuchsia Gym to earn the Soul Badge",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Fuchsia City",
+        "badge_count": 4
+      },
+      "completion_conditions": {
+        "badge_count": 5
+      },
+      "hints": [
+        "Fuchsia City is south of Celadon via Route 18.",
+        "Koga uses Poison-type Pokemon (Koffing, Muk, Weezing).",
+        "Psychic and Ground moves are super effective.",
+        "Psychic types are dominant in Gen 1."
+      ]
+    },
+    {
+      "id": "MARSH_BADGE",
+      "description": "Defeat Sabrina at Saffron Gym to earn the Marsh Badge",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Saffron City",
+        "badge_count": 5
+      },
+      "completion_conditions": {
+        "badge_count": 6
+      },
+      "hints": [
+        "Saffron City is between Celadon, Vermilion, and Lavender.",
+        "Sabrina uses Psychic-type Pokemon (Abra, Kadabra, Alakazam).",
+        "Bug and Ghost moves are theoretically super effective.",
+        "In Gen 1, Ghost moves bug against Psychic — use strong physical attacks.",
+        "This is one of the hardest gyms."
+      ]
+    },
+    {
+      "id": "VOLCANO_BADGE",
+      "description": "Defeat Blaine at Cinnabar Gym to earn the Volcano Badge",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Cinnabar Island",
+        "badge_count": 6
+      },
+      "completion_conditions": {
+        "badge_count": 7
+      },
+      "hints": [
+        "Cinnabar Island is south of Fuchsia via Route 19 (surf required).",
+        "Blaine uses Fire-type Pokemon (Growlithe, Ponyta, Rapidash).",
+        "Water and Rock moves are super effective.",
+        "If you chose Squirtle, this is straightforward."
+      ]
+    },
+    {
+      "id": "EARTH_BADGE",
+      "description": "Defeat Giovanni at Viridian Gym to earn the Earth Badge",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Viridian City",
+        "badge_count": 7
+      },
+      "completion_conditions": {
+        "badge_count": 8
+      },
+      "hints": [
+        "Viridian Gym is in Viridian City (where you started).",
+        "Giovanni uses Ground-type Pokemon (Rhyhorn, Dugtrio, Nidoqueen, Nidoking, Rhydon).",
+        "Water and Grass moves are super effective.",
+        "This is the final gym badge."
+      ]
+    },
+    {
+      "id": "ELITE_FOUR",
+      "description": "Defeat the Elite Four and become Champion",
+      "category": "battling",
+      "start_conditions": {
+        "map_name": "Indigo Plateau",
+        "badge_count": 8
+      },
+      "completion_conditions": {
+        "state_changed": true
+      },
+      "hints": [
+        "Travel to Indigo Plateau (north of Victory Road).",
+        "Elite Four members: Lorelei (Ice), Bruno (Fighting), Agatha (Ghost), Lance (Dragon).",
+        "Champion is your rival (Blue/Gary) with a strong team.",
+        "Recommended team level: 55-65.",
+        "Stock up on Potions, Revives, and Full Restores before entering.",
+        "Psychic types are very strong in Gen 1 — consider having one."
+      ]
+    }
+  ]
+}
