@@ -175,18 +175,27 @@
         // Render the ASCII grid with color spans.
         // Safe innerHTML: we build HTML from server-provided ASCII grid with
         // a strict character-to-span mapping. No user-controlled input.
-        // Strip legend lines (starting with @, S, ●, or empty) — dashboard
-        // has its own color legend via CSS.
+        // Legend lines (plain text like "@ you   . walkable") are kept as-is
+        // and rendered below the color-coded grid.
         var html = '';
         var lines = grid.split('\n');
+        var pastGrid = false;
         for (var li = 0; li < lines.length; li++) {
             var line = lines[li];
-            // Skip legend/empty lines
-            if (line.trim() === '' || line.trim().startsWith('@ you') ||
-                line.trim().startsWith('S stairs') || line.trim().startsWith('● item') ||
-                line.trim().startsWith('Legend:')) {
+            // Detect legend lines: these contain letters/words, not grid chars
+            var isLegend = line.trim() === '' ||
+                line.trim().startsWith('@ you') ||
+                line.trim().startsWith('S stairs') ||
+                line.trim().startsWith('● item') ||
+                line.trim().startsWith('Legend:');
+            if (isLegend) {
+                pastGrid = true;
+                if (line.trim() !== '') {
+                    html += '<span style="color:var(--paper-faint);font-size:9px">' + line.trim() + '</span>\n';
+                }
                 continue;
             }
+            pastGrid = false;
             for (var i = 0; i < line.length; i++) {
                 var ch = line[i];
                 if (ch === '#' || ch === '▦') {
