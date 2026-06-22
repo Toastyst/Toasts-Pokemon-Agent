@@ -136,14 +136,10 @@ class StandaloneAgent:
         # Temporary — cleared when map changes or after N steps
         self.recent_exit_positions: List[Tuple[str, int, int]] = []  # (map_name, x, y)
         self.exit_avoidance_counter: int = 0  # steps since last exit
+        self.last_move_direction: Optional[str] = None  # "up" | "down" | "left" | "right" | None
 
         # Planned path from A* — shown to LLM as a suggested route
         self.planned_path: List[str] = []  # e.g. ["walk_up", "walk_up", "walk_right"]
-
-        # Exit avoidance: set of doormat/warp positions we just exited through
-        # Temporary — cleared when map changes or after N steps
-        self.recent_exit_positions: List[Tuple[str, int, int]] = []  # (map_name, x, y)
-        self.exit_avoidance_counter: int = 0  # steps since last exit
 
         # Long-term memory + RAG (persisted to disk)
         self.memory = PokemonMemory(persist_dir="memory")
@@ -488,28 +484,42 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         """If we just exited a building, return a nudge to not walk back."""
         if not getattr(self, 'exit_avoidance_counter', 0):
             return None
-        if self.exit_avoidance_counter > 5:
-            # Clear after 5 steps — agent has moved away
+        if self.exit_avoidance_counter > 10:
+            # Clear after 10 steps — agent has moved well away
             self.recent_exit_positions.clear()
             self.exit_avoidance_counter = 0
             return None
-        # Show the exit position(s) to avoid — only when player is close
+        # Show the exit position(s) to avoid — larger radius (5 tiles)
         parts = []
         pos = getattr(self, 'current_position', None)
         if pos:
             px, py = pos
         else:
             px, py = -99, -99
-        for mname, ex, ey in self.recent_exit_positions:
-            if mname == map_name:
+        for mname2, ex, ey in self.recent_exit_positions:
+            if mname2 == map_name:
                 dist = abs(ex - px) + abs(ey - py)
-                if dist <= 3:
+                if dist <= 5:
                     parts.append(f"({ex},{ey})")
         if parts:
-            return ("🚪 You JUST exited through doormat/warp(s) at "
+            # Calculate which direction leads back toward the exit
+            avoid_dirs = []
+            for mname2, ex, ey in self.recent_exit_positions:
+                if mname2 != map_name:
+                    continue
+                dx = ex - px
+                dy = ey - py
+                if abs(dx) >= abs(dy):
+                    avoid_dirs.append("press_left" if dx > 0 else "press_right")
+                else:
+                    avoid_dirs.append("press_up" if dy > 0 else "press_down")
+            avoid_str = ", ".join(set(avoid_dirs))
+            return ("🚪 EXIT COMMITMENT REQUIRED: You just exited through doormat/warp(s) at "
                     + ", ".join(parts)
-                    + ". Do NOT step back onto those exact tiles — you'll warp back inside."
-                    + " Other directions are fine.")
+                    + f". AVOID: {avoid_str}"
+                    + " — you just came from there."
+                    + " Pick a DIFFERENT direction and COMMIT to it for at least 5 steps."
+                    + " Do NOT go back inside — keep exploring outside!")
         return None
 
     def _update_visited_tiles(self, map_name: str, pos: Tuple[int, int]):
@@ -675,6 +685,12 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         """Send a single action to the server and return new state."""
         self.last_position = self.current_position
         self.last_action = action
+        # Track last movement direction for anti-oscillation
+        dir_map = {
+            "press_up": "up", "press_down": "down",
+            "press_left": "left", "press_right": "right",
+        }
+        self.last_move_direction = dir_map.get(action)
         new_state = self.executor.step(action)
         if new_state:
             self.current_position = (new_state.get("x", 0), new_state.get("y", 0))
