@@ -66,6 +66,11 @@ def build_game_state(
                 f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
             )
 
+    # Flatten map_name to top level for agent convenience
+    map_info = state.get("map")
+    if map_info and isinstance(map_info, dict) and "map_name" in map_info:
+        state["map_name"] = map_info["map_name"]
+
     return state
 
 
