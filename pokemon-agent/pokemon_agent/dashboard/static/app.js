@@ -187,7 +187,8 @@
                 line.trim().startsWith('@ you') ||
                 line.trim().startsWith('S stairs') ||
                 line.trim().startsWith('W warp') ||
-                line.trim().startsWith('● item') ||
+                line.trim().startsWith('● pokeball') ||
+                line.trim().startsWith('▲ pokedex') ||
                 line.trim().startsWith('Legend:');
             if (isLegend) {
                 pastGrid = true;
@@ -207,6 +208,8 @@
                             html += '<span class="cg-npc">' + fh + '</span>';
                         } else if (fh === '●') {
                             html += '<span class="cg-item">' + fh + '</span>';
+                        } else if (fh === '▲') {
+                            html += '<span class="cg-pokedex">' + fh + '</span>';
                         } else if (fh === 'D') {
                             html += '<span class="cg-door">' + fh + '</span>';
                         } else if (fh === 'S') {
@@ -234,6 +237,8 @@
                     html += '<span class="cg-npc">' + ch + '</span>';
                 } else if (ch === '●') {
                     html += '<span class="cg-item">' + ch + '</span>';
+                } else if (ch === '▲') {
+                    html += '<span class="cg-pokedex">' + ch + '</span>';
                 } else if (ch === 'D') {
                     html += '<span class="cg-door">' + ch + '</span>';
                 } else if (ch === 'S') {

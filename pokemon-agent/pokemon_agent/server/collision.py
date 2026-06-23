@@ -378,13 +378,18 @@ def render_ascii_map(
                 else:
                     cells.append(" @ ")
             elif (abs_y, abs_x) in sprite_cells:
-                # Show sprite: ● for item, ☻ for NPC
+                # Show sprite: ● for pokeball, ▲ for pokedex, ☻ for NPC
                 sp_list = sprite_cells[(abs_y, abs_x)]
                 # Prefer item over NPC if both at same cell
                 has_item = any(s.get("type") == "item" for s in sp_list)
                 has_npc = any(s.get("type") == "npc" for s in sp_list)
                 if has_item:
-                    cells.append(" ● ")
+                    # Differentiate item subtypes by name
+                    item_names = [s.get("name", "") for s in sp_list if s.get("type") == "item"]
+                    if any("PokeDex" in n or "Pokedex" in n for n in item_names):
+                        cells.append(" ▲ ")
+                    else:
+                        cells.append(" ● ")  # Pokeball / generic item
                 elif has_npc:
                     cells.append(" ☻ ")
                 else:
@@ -409,5 +414,5 @@ def render_ascii_map(
         lines.append("")
         lines.append("@ you   . walkable   # blocked")
         lines.append("S stairs/warp  D door/doormat")
-        lines.append("W warp-pad/hole  ● item  ☻ NPC")
+        lines.append("W warp-pad/hole  ● pokeball  ▲ pokedex  ☻ NPC")
     return "\n".join(lines)

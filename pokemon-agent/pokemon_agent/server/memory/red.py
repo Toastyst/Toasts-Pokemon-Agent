@@ -973,9 +973,11 @@ MAP_SPRITES: Dict[int, List[Dict[str, Any]]] = {
     40: [
         {"picture_id": 0x0D, "y": 2, "x": 5, "movement": 0, "text_id": 0xFF, "type": "npc", "name": "Oak"},
         {"picture_id": 0x05, "y": 3, "x": 4, "movement": 0, "text_id": 0xFF, "type": "npc", "name": "Rival (Blue)"},
-        {"picture_id": 0x0B, "y": 3, "x": 6, "movement": 0, "text_id": 0xFF, "type": "item", "name": "Pokeball"},
-        {"picture_id": 0x0B, "y": 3, "x": 7, "movement": 0, "text_id": 0xFF, "type": "item", "name": "Pokeball"},
-        {"picture_id": 0x0B, "y": 3, "x": 8, "movement": 0, "text_id": 0xFF, "type": "item", "name": "Pokeball"},
+        {"picture_id": 0x3D, "y": 3, "x": 6, "movement": 0, "text_id": 0xFF, "type": "item", "name": "Pokeball"},
+        {"picture_id": 0x3D, "y": 3, "x": 7, "movement": 0, "text_id": 0xFF, "type": "item", "name": "Pokeball"},
+        {"picture_id": 0x3D, "y": 3, "x": 8, "movement": 0, "text_id": 0xFF, "type": "item", "name": "Pokeball"},
+        {"picture_id": 0x41, "y": 1, "x": 2, "movement": 0, "text_id": 0xFF, "type": "item", "name": "PokeDex"},
+        {"picture_id": 0x41, "y": 1, "x": 3, "movement": 0, "text_id": 0xFF, "type": "item", "name": "PokeDex"},
     ],
     # Red's House 1F (map 37)
     37: [

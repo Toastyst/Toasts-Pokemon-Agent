@@ -535,6 +535,7 @@ body::before {
     --cg-npc: #c9a227;
     --cg-warp: #d9482f;
     --cg-item: #4f7bd6;
+    --cg-pokedex: #7fb6b6;
     --cg-door: #b8922e;
     --cg-stairs: #7e4a86;
 }
@@ -544,6 +545,7 @@ body::before {
 .collision-grid .cg-npc   { color: var(--cg-npc); }
 .collision-grid .cg-warp  { color: var(--cg-warp); }
 .collision-grid .cg-item  { color: var(--cg-item); }
+.collision-grid .cg-pokedex { color: var(--cg-pokedex); }
 .collision-grid .cg-door  { color: var(--cg-door); }
 .collision-grid .cg-stairs { color: var(--cg-stairs); }
 .console-stream {
