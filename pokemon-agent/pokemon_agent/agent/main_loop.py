@@ -72,7 +72,7 @@ class StandaloneAgent:
             base_url=provider_cfg["base_url"],
             api_key=provider_cfg.get("api_key", "not-needed"),
             model=model_name,
-            max_tokens=2048,
+            max_tokens=8192,
             timeout=120,
             vision_fallback_models=config.get("vision_fallback_models", []),
             providers=vision_providers,
@@ -624,12 +624,19 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         # --- P0b: Compute A* path and store for prompt injection ---
         # If no target_position, pick an intermediate target in the direction
         # of the objective so A* has a goal to path toward.
+        # Also: if direction_hint matches a known warp destination, set
+        # target_position to the warp tile so A* paths directly to it.
         if target_position is None and game_state:
-            _intermediate = self.executor.pick_intermediate_target(
-                game_state, direction_hint=objective)
-            if _intermediate:
-                target_position = _intermediate
-                print(f"  [A*] Auto-target: {target_position} (from objective: {objective[:50]})")
+            _warp_target = self.executor.find_warp_for_objective(game_state, objective)
+            if _warp_target:
+                target_position = _warp_target
+                print(f"  [A*] Warp target: {target_position} (from objective: {objective[:50]})")
+            else:
+                _intermediate = self.executor.pick_intermediate_target(
+                    game_state, direction_hint=objective)
+                if _intermediate:
+                    target_position = _intermediate
+                    print(f"  [A*] Auto-target: {target_position} (from objective: {objective[:50]})")
         self.planned_path = self._compute_astar_path(
             game_state, target_position, max_steps=8,
             suggested_direction=suggested_direction)

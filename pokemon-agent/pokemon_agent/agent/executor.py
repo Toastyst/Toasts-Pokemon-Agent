@@ -200,6 +200,49 @@ class Executor:
         """Return list of walkable directions from current position."""
         return get_walkable_directions(state)
 
+    def find_warp_for_objective(self, state: Dict[str, Any],
+                                objective: str) -> Optional[Tuple[int, int]]:
+        """Find a warp tile whose destination matches the objective text.
+
+        Returns (x, y) of the matching warp tile, or None if no match.
+        Used by A* to path directly to building entrances.
+        """
+        if not objective:
+            return None
+        hint_lower = objective.lower()
+        state_warps = state.get("warps", []) or state.get("raw", {}).get("warps", [])
+
+        best_warp_match = None
+        best_warp_score = -1
+        for w in state_warps:
+            dest_name = w.get("dest_name", "")
+            if not dest_name:
+                continue
+            dest_lower = dest_name.lower()
+            # Score: count how many significant words from the hint appear in dest_name
+            score = 0
+            hint_words = hint_lower.split()
+            for word in hint_words:
+                if len(word) >= 4 and word in dest_lower:
+                    score += 10
+                elif len(word) >= 3 and word in dest_lower:
+                    score += 5
+            # Also check if dest_name words appear in hint (bidirectional)
+            dest_words = dest_lower.replace("'", "").replace("the ", "").split()
+            for word in dest_words:
+                if len(word) >= 4 and word in hint_lower:
+                    score += 3
+            # Penalize distance slightly so closer warps win on ties
+            px, py = state.get("x", 0), state.get("y", 0)
+            dist = abs(w.get("x", 0) - px) + abs(w.get("y", 0) - py)
+            score -= dist * 0.01
+            if score > best_warp_score:
+                best_warp_score = score
+                best_warp_match = w
+        if best_warp_match and best_warp_score >= 5:
+            return (best_warp_match.get("x", 0), best_warp_match.get("y", 0))
+        return None
+
     def pick_intermediate_target(self, state: Dict[str, Any],
                                 direction_hint: str = "",
                                 max_range: int = 7) -> Optional[Tuple[int, int]]:
@@ -742,6 +785,36 @@ class Executor:
                 return best_dir
             # Fallback: return first candidate even if not walkable
             return candidates[0][0]
+
+        # 1b. If direction_hint matches a known warp destination, target it directly.
+        #     This ensures "Heal at Pokemon Center" paths to the Pokecenter warp,
+        #     not just the nearest exit warp.
+        if direction_hint:
+            warp_pos = self.find_warp_for_objective(state, direction_hint)
+            if warp_pos:
+                wx, wy = warp_pos
+                print(f"  [GPS-exec] Warp match for '{direction_hint[:40]}': "
+                      f"({wx},{wy}) (score≥5)")
+                dx = wx - px
+                dy = wy - py
+                if abs(dx) >= abs(dy):
+                    primary = "press_right" if dx > 0 else "press_left"
+                    secondary = "press_down" if dy > 0 else "press_up"
+                else:
+                    primary = "press_down" if dy > 0 else "press_up"
+                    secondary = "press_right" if dx > 0 else "press_left"
+                # Check walkability
+                dir_to_delta = {
+                    "press_up": (0, -1), "press_down": (0, 1),
+                    "press_left": (-1, 0), "press_right": (1, 0),
+                }
+                pdx, pdy = dir_to_delta[primary]
+                if is_walkable(state, px + pdx, py + pdy):
+                    return primary
+                sdx, sdy = dir_to_delta[secondary]
+                if is_walkable(state, px + sdx, py + sdy):
+                    return secondary
+                return primary  # fallback
 
         # 2. If we have a chosen starter, guide to nearest unchecked pokeball
         # Labels are unreliable — the LLM identifies content via dialog.

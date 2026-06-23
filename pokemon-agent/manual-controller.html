@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokémon Manual Controller • pokemon-agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;display=swap');
+        
+        :root {
+            --gb-green: #0f380f;
+            --gb-light: #9bbc0f;
+        }
+        
+        body {
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        
+        .gb-font {
+            font-family: "Press Start 2P", system-ui;
+        }
+        
+        .controller-btn {
+            transition: all 0.05s ease;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        .controller-btn:active {
+            transform: scale(0.92);
+            background-color: #166534;
+        }
+        
+        .dpad-btn {
+            width: 64px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            background: #1f2937;
+            border: 3px solid #4b5563;
+            color: #e5e7eb;
+        }
+        
+        .action-btn {
+            background: #166534;
+            border: 3px solid #4ade80;
+            color: white;
+            font-weight: 700;
+            padding: 12px 20px;
+            border-radius: 8px;
+            min-width: 72px;
+        }
+        
+        .action-btn:hover {
+            background: #15803d;
+        }
+        
+        .section-header {
+            font-family: "Press Start 2P", system-ui;
+            letter-spacing: 1px;
+        }
+        
+        .log-entry {
+            font-family: ui-monospace, monospace;
+            font-size: 0.75rem;
+        }
+        
+        .gameboy-screen {
+            background: #0f380f;
+            border: 8px solid #4b5563;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.6);
+        }
+        
+        .status-dot {
+            animation: pulse 2s infinite;
+        }
+
+        /* Tab styles */
+        .tab-btn {
+            padding: 10px 20px;
+            font-family: "Press Start 2P", system-ui;
+            font-size: 0.6rem;
+            letter-spacing: 1px;
+            border-bottom: 3px solid transparent;
+            color: #6b7280;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .tab-btn:hover {
+            color: #a3e635;
+        }
+        .tab-btn.active {
+            color: #4ade80;
+            border-bottom-color: #4ade80;
+        }
+        .tab-panel {
+            display: none;
+        }
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* Editor styles */
+        .step-card {
+            background: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+        .step-card:hover {
+            border-color: #4ade80;
+        }
+        .step-card.editing {
+            border-color: #f59e0b;
+            background: #1c1917;
+        }
+        .editor-textarea {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            font-family: ui-monospace, monospace;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            padding: 8px;
+            width: 100%;
+            resize: vertical;
+        }
+        .editor-textarea:focus {
+            outline: none;
+            border-color: #4ade80;
+        }
+        .editor-input {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            padding: 4px 8px;
+            width: 100%;
+        }
+        .editor-input:focus {
+            outline: none;
+            border-color: #4ade80;
+        }
+        .prompt-editor {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            font-family: ui-monospace, monospace;
+            font-size: 0.75rem;
+            line-height: 1.5;
+            border-radius: 8px;
+            padding: 16px;
+            width: 100%;
+            min-height: 500px;
+            resize: vertical;
+            white-space: pre-wrap;
+        }
+        .prompt-editor:focus {
+            outline: none;
+            border-color: #4ade80;
+        }
+        .code-viewer {
+            max-height: calc(100vh - 220px);
+            min-height: 400px;
+            tab-size: 4;
+            -moz-tab-size: 4;
+        }
+
+        /* Editor sub-tabs */
+        .editor-subtab {
+            padding: 6px 14px;
+            font-size: 0.7rem;
+            color: #6b7280;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .editor-subtab:hover {
+            color: #a3e635;
+            background: #18181b;
+        }
+        .editor-subtab.active {
+            color: #4ade80;
+            background: #18181b;
+            font-weight: 600;
+        }
+        .editor-subpanel {
+            display: none;
+        }
+        .editor-subpanel.active {
+            display: block;
+        }
+
+        /* Improved step cards */
+        .step-card {
+            background: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 10px;
+        }
+        .step-card:hover {
+            border-color: #4ade80;
+        }
+        .step-card.editing {
+            border-color: #f59e0b;
+            background: #1c1917;
+            padding: 18px;
+        }
+        .step-view-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .step-view-main {
+            flex: 1;
+            min-width: 0;
+        }
+        .step-view-actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .step-field {
+            margin-bottom: 12px;
+        }
+        .step-field label {
+            display: block;
+            font-size: 10px;
+            color: #71717a;
+            margin-bottom: 4px;
+            font-family: ui-monospace, monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .step-field-input {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            padding: 8px 12px;
+            width: 100%;
+            font-family: ui-monospace, monospace;
+        }
+        .step-field-input:focus {
+            outline: none;
+            border-color: #4ade80;
+        }
+        .step-field-textarea {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            padding: 8px 12px;
+            width: 100%;
+            resize: vertical;
+            font-family: ui-monospace, monospace;
+            min-height: 80px;
+            line-height: 1.5;
+        }
+        .step-field-textarea:focus {
+            outline: none;
+            border-color: #4ade80;
+        }
+        .step-badge {
+            display: inline-block;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: ui-monospace, monospace;
+        }
+        .step-badge-story { background: #1e3a5f; color: #60a5fa; }
+        .step-badge-battling { background: #5f1e1e; color: #f87171; }
+        .step-json-preview {
+            font-size: 10px;
+            color: #a1a1aa;
+            font-family: ui-monospace, monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 60px;
+            overflow: hidden;
+            position: relative;
+        }
+        .step-json-preview::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 20px;
+            background: linear-gradient(transparent, #18181b);
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+    <div class="max-w-[1400px] mx-auto p-4 md:p-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <div class="flex items-center gap-x-3">
+                    <div class="w-10 h-10 bg-emerald-600 rounded flex items-center justify-center">
+                        <i class="fa-solid fa-gamepad text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold tracking-tighter gb-font">POKÉMON MANUAL</h1>
+                        <p class="text-emerald-400 text-sm -mt-1">Direct Control Panel</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-x-4">
+                <div id="connection-status" 
+                     class="flex items-center gap-x-2 px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-full text-sm">
+                    <div class="w-2.5 h-2.5 bg-emerald-500 rounded-full status-dot"></div>
+                    <span id="status-text" class="font-medium">Connected</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="flex gap-1 mb-6 bg-zinc-900 rounded-xl px-2 py-1 border border-zinc-800">
+            <button class="tab-btn active" onclick="switchTab('controller')" id="tab-controller">
+                <i class="fa-solid fa-gamepad mr-2"></i>CONTROLLER
+            </button>
+            <button class="tab-btn" onclick="switchTab('editor')" id="tab-editor">
+                <i class="fa-solid fa-pen-to-square mr-2"></i>GUIDE + PROMPTS
+            </button>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB: CONTROLLER                                               -->
+        <!-- ============================================================ -->
+        <div id="panel-controller" class="tab-panel active">
+        <div class="flex items-center justify-between gap-x-4 mb-4">
+            <div class="flex items-center gap-x-3">
+                <button onclick="pingServer()" 
+                        class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm flex items-center gap-x-2">
+                    <i class="fa-solid fa-sync text-xs"></i>
+                    <span>Ping</span>
+                </button>
+
+                <!-- Agent start/stop -->
+                <button id="btn-autopilot" onclick="toggleAutopilot()"
+                        class="px-5 py-2 bg-emerald-700 hover:bg-emerald-600 border border-emerald-500 rounded-lg text-sm font-semibold flex items-center gap-x-2 text-white">
+                    <i class="fa-solid fa-robot" id="autopilot-icon"></i>
+                    <span id="autopilot-label">START AGENT</span>
+                </button>
+            </div>
+            <div class="text-[10px] text-zinc-500 font-mono">
+                POST /action · <span id="turn-counter">0 turns</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- CONTROLLER -->
+            <div class="lg:col-span-5 bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="section-header text-emerald-400 text-sm tracking-[2px]">CONTROLLER</h2>
+                    <div class="text-[10px] text-zinc-500">POST /action</div>
+                </div>
+
+                <!-- Main controls: D-Pad + A/B buttons side-by-side at top -->
+                <div class="flex items-start justify-between gap-6 mb-3">
+                    <!-- D-Pad (left) -->
+                    <div>
+                        <div class="grid grid-cols-3 gap-1 w-[210px]">
+                            <!-- Up -->
+                            <div></div>
+                            <button onclick="sendAction('press_up')"
+                                    class="dpad-btn rounded-t-2xl flex-col">
+                                <i class="fa-solid fa-chevron-up"></i>
+                                <span class="text-[9px] mt-0.5 font-bold tracking-widest">UP</span>
+                            </button>
+                            <div></div>
+                            
+                            <!-- Left -->
+                            <button onclick="sendAction('press_left')"
+                                    class="dpad-btn rounded-l-2xl flex-col">
+                                <i class="fa-solid fa-chevron-left"></i>
+                                <span class="text-[9px] mt-0.5 font-bold tracking-widest">LEFT</span>
+                            </button>
+                            
+                            <!-- Center -->
+                            <div class="dpad-btn bg-zinc-800 border-zinc-700 rounded text-[10px] flex items-center justify-center font-bold text-zinc-400">D-PAD</div>
+                            
+                            <!-- Right -->
+                            <button onclick="sendAction('press_right')"
+                                    class="dpad-btn rounded-r-2xl flex-col">
+                                <i class="fa-solid fa-chevron-right"></i>
+                                <span class="text-[9px] mt-0.5 font-bold tracking-widest">RIGHT</span>
+                            </button>
+                            
+                            <div></div>
+                            <!-- Down -->
+                            <button onclick="sendAction('press_down')"
+                                    class="dpad-btn rounded-b-2xl flex-col">
+                                <i class="fa-solid fa-chevron-down"></i>
+                                <span class="text-[9px] mt-0.5 font-bold tracking-widest">DOWN</span>
+                            </button>
+                            <div></div>
+                        </div>
+                    </div>
+
+                    <!-- A/B buttons (right of D-pad, at top) -->
+                    <div class="flex gap-3 pt-2">
+                        <button onclick="sendAction('press_a')"
+                                class="action-btn text-xl px-8 py-4 shadow-inner flex items-center justify-center gap-2">
+                            <span class="font-black text-2xl">A</span>
+                        </button>
+                        
+                        <button onclick="sendAction('press_b')"
+                                class="action-btn text-xl px-8 py-4 bg-orange-700 border-orange-400 shadow-inner flex items-center justify-center gap-2">
+                            <span class="font-black text-2xl">B</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Secondary buttons row (Start/Select/Reset) - keeps position near top -->
+                <div class="flex justify-center gap-3 mb-5">
+                    <button onclick="sendAction('press_start')"
+                            class="px-5 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 rounded-xl text-sm font-semibold flex items-center gap-2">
+                        <i class="fa-solid fa-play text-emerald-400"></i>
+                        <span>START</span>
+                    </button>
+                    <button onclick="sendAction('press_select')"
+                            class="px-5 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 rounded-xl text-sm font-semibold flex items-center gap-2">
+                        <i class="fa-solid fa-bars text-amber-400"></i>
+                        <span>SELECT</span>
+                    </button>
+                    <button onclick="if(confirm('Reset the emulator to title screen?')) fetch(`${BASE_URL}/reset`, {method:'POST'}).then(r=>r.json()).then(d=>logAction(['RESET'], d))"
+                            class="px-4 py-3 bg-red-700 hover:bg-red-600 border border-red-500 rounded-xl text-sm font-semibold flex items-center gap-2 text-white">
+                        <i class="fa-solid fa-power-off"></i>
+                        <span>RESET</span>
+                    </button>
+                </div>
+
+                <!-- Hold B Section -->
+                <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+                    <div class="flex items-center gap-2 text-sm mb-3 text-emerald-400">
+                        <i class="fa-solid fa-clock"></i>
+                        <span class="font-semibold">HOLD B (speed text)</span>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <input id="hold-b-frames" type="number" value="1000" 
+                               class="w-20 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-center font-mono text-lg">
+                        <span class="text-xs text-zinc-400">frames</span>
+                        
+                        <button onclick="sendHoldB()"
+                                class="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-hand-paper"></i>
+                            <span>HOLD B</span>
+                        </button>
+                    </div>
+                    
+                    <div class="flex gap-2 mt-2">
+                        <button onclick="quickHoldB(300)" class="flex-1 text-xs py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded">300</button>
+                        <button onclick="quickHoldB(600)" class="flex-1 text-xs py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded">600</button>
+                        <button onclick="quickHoldB(1200)" class="flex-1 text-xs py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded">1200</button>
+                        <button onclick="quickHoldB(2000)" class="flex-1 text-xs py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded">2000</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CUSTOM + TOOLS -->
+            <div class="lg:col-span-7 bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Custom Sequence -->
+                    <div>
+                        <h3 class="section-header text-emerald-400 text-xs tracking-[1.5px] mb-2">CUSTOM SEQUENCE</h3>
+                        <div class="flex gap-2">
+                            <input id="custom-sequence" type="text" placeholder="press_a,hold_b_800,press_a"
+                                   class="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-emerald-500">
+                            <button onclick="sendCustomSequence()"
+                                    class="bg-emerald-600 hover:bg-emerald-500 px-6 rounded-xl font-bold text-sm">
+                                SEND
+                            </button>
+                        </div>
+                        <div class="text-[10px] text-zinc-500 mt-1.5">
+                            Comma separated. Examples: <span class="font-mono">press_a</span>, 
+                            <span class="font-mono">hold_b_1000</span>, <span class="font-mono">wait_60</span>
+                        </div>
+                    </div>
+
+                    <!-- Quick Helpers -->
+                    <div>
+                        <h3 class="section-header text-emerald-400 text-xs tracking-[1.5px] mb-2">QUICK HELPERS (early game)</h3>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="sendAction('a_until_dialog_end')"
+                                    class="text-xs px-3 py-2 bg-violet-700 hover:bg-violet-600 rounded-lg">
+                                A until dialog ends
+                            </button>
+                            <button onclick="sendAction('wake_sequence')"
+                                    class="text-xs px-3 py-2 bg-violet-700 hover:bg-violet-600 rounded-lg">
+                                Wake / Intro Skip
+                            </button>
+                            <button onclick="sendSequence(['press_start','wait_200','hold_b_2000','wait_200','hold_a_200','wait_200','hold_a_200','wait_200','press_a','hold_b_2000','press_a','hold_b_2000','press_a','wait_2000','press_a','wait_2000','press_a','wait_2000','press_a','wait_60','press_a','wait_90','press_a','wait_60','press_a','wait_60','press_a','wait_60','press_b','hold_b_2000','press_a','hold_b_2000','press_a','wait_200'])"
+                                    class="text-xs px-3 py-2 bg-emerald-700 hover:bg-emerald-600 rounded-lg font-semibold">
+                                Reach Name Selection
+                            </button>
+                            <button onclick="sendAction('wait_30')"
+                                    class="text-xs px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg">Wait 30f</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ASCII Map + Parsed State -->
+                <div class="mt-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="section-header text-emerald-400 text-xs tracking-[1.5px]">MAP + STATE</h3>
+                        <button onclick="fetchState()" 
+                                class="text-xs px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded flex items-center gap-1">
+                            <i class="fa-solid fa-sync text-[10px]"></i>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <!-- ASCII Map -->
+                        <div>
+                            <div class="text-[10px] text-zinc-500 mb-1 font-mono">COLLISION GRID (@ = you, . = walkable, # = wall, S = warp, D = door)</div>
+                            <pre id="ascii-map" 
+                                 class="gameboy-screen h-52 overflow-auto text-emerald-300 text-[10px] leading-tight p-3 rounded-xl font-mono whitespace-pre border border-emerald-900/50">Loading...</pre>
+                        </div>
+                        <!-- Parsed State -->
+                        <div>
+                            <div class="text-[10px] text-zinc-500 mb-1 font-mono">PARSED STATE</div>
+                            <div id="parsed-state" 
+                                 class="gameboy-screen h-52 overflow-auto text-emerald-300 text-[10px] p-3 rounded-xl font-mono whitespace-pre-wrap border border-emerald-900/50">
+                                Loading...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- State + Screenshot -->
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Raw State JSON -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="section-header text-emerald-400 text-xs tracking-[1.5px]">RAW STATE JSON</h3>
+                        </div>
+                        <pre id="state-display" 
+                             class="gameboy-screen h-48 overflow-auto text-emerald-300 text-[10px] p-3 rounded-xl font-mono whitespace-pre-wrap border border-emerald-900/50">Click "Refresh" to load state...</pre>
+                    </div>
+
+                    <!-- Screenshot -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="section-header text-emerald-400 text-xs tracking-[1.5px]">SCREENSHOT</h3>
+                            <button onclick="fetchScreenshot()" 
+                                    class="text-xs px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded flex items-center gap-1">
+                                <i class="fa-solid fa-camera text-[10px]"></i>
+                                <span>Capture</span>
+                            </button>
+                        </div>
+                        <div class="gameboy-screen h-48 flex items-center justify-center overflow-hidden rounded-xl border border-emerald-900/50">
+                            <img id="screenshot-img" class="max-h-full max-w-full object-contain hidden" alt="Game screenshot">
+                            <div id="screenshot-placeholder" class="text-center text-emerald-800">
+                                <i class="fa-solid fa-image text-4xl mb-2"></i>
+                                <div class="text-xs">No screenshot yet</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save / Load -->
+                <div class="mt-4 bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+                    <div class="text-emerald-400 text-xs tracking-widest mb-2">SAVE STATES</div>
+                    <div class="flex gap-2">
+                        <input id="savestate-name" type="text" placeholder="my-progress" value="manual-1"
+                               class="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                        <button onclick="saveState()" class="px-5 py-2 bg-emerald-700 hover:bg-emerald-600 text-sm rounded-lg font-semibold">SAVE</button>
+                        <button onclick="loadState()" class="px-5 py-2 bg-amber-700 hover:bg-amber-600 text-sm rounded-lg font-semibold">LOAD</button>
+                    </div>
+                    <div class="mt-1 text-[10px] text-zinc-500">Saves to server-side state files</div>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- Action Log -->
+        <div class="mt-6 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="section-header text-emerald-400 text-xs tracking-[2px]">ACTION LOG (local)</h3>
+                <button onclick="clearLog()" class="text-xs text-red-400 hover:text-red-300">Clear</button>
+            </div>
+            <div id="action-log" class="h-40 overflow-auto text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-xl p-3 space-y-1"></div>
+        </div>
+        </div><!-- end tab-panel controller -->
+
+        <!-- ============================================================ -->
+        <!-- TAB: GUIDE + PROMPTS EDITOR                                   -->
+        <!-- ============================================================ -->
+        <div id="panel-editor" class="tab-panel">
+        <!-- Editor sub-tabs -->
+        <div class="flex gap-1 mb-4 bg-zinc-900 rounded-lg px-1.5 py-1 border border-zinc-800 w-fit">
+            <button class="editor-subtab active" onclick="switchEditorTab('guide')" id="editor-tab-guide">
+                <i class="fa-solid fa-list-ol mr-1.5"></i>Guide Steps
+            </button>
+            <button class="editor-subtab" onclick="switchEditorTab('navprompt')" id="editor-tab-navprompt">
+                <i class="fa-solid fa-compass mr-1.5"></i>Nav Prompt
+            </button>
+            <button class="editor-subtab" onclick="switchEditorTab('promptspy')" id="editor-tab-promptspy">
+                <i class="fa-solid fa-code mr-1.5"></i>prompts.py
+            </button>
+            <button class="editor-subtab" onclick="switchEditorTab('autopilot')" id="editor-tab-autopilot">
+                <i class="fa-solid fa-robot mr-1.5"></i>Autopilot
+            </button>
+        </div>
+
+        <!-- Sub-tab: Guide Steps -->
+        <div id="editor-panel-guide" class="editor-subpanel active">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <span id="guide-step-count" class="text-xs text-zinc-500 font-mono">0 steps</span>
+                    <input id="guide-filter" type="text" placeholder="Filter..." oninput="filterGuide()"
+                           class="bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-xs font-mono w-40 focus:outline-none focus:border-emerald-500">
+                    <select id="guide-filter-category" onchange="filterGuide()"
+                            class="bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none">
+                        <option value="">All</option>
+                        <option value="story">story</option>
+                        <option value="battling">battling</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="addNewStep()" class="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-dashed border-zinc-600 rounded text-zinc-400 hover:text-emerald-400">
+                        <i class="fa-solid fa-plus mr-1"></i>Add Step
+                    </button>
+                    <button onclick="loadGuide()" class="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded flex items-center gap-1">
+                        <i class="fa-solid fa-sync text-[10px]"></i><span>Reload</span>
+                    </button>
+                    <button onclick="saveGuide()" class="text-xs px-4 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-save text-[10px]"></i><span>Save All</span>
+                    </button>
+                </div>
+            </div>
+            <div id="guide-steps-list" class="space-y-2 overflow-y-auto pr-1" style="max-height: calc(100vh - 220px);">
+                <div class="text-zinc-500 text-xs text-center py-8">Click "Reload" to load guide.json</div>
+            </div>
+        </div>
+
+        <!-- Sub-tab: Nav Prompt -->
+        <div id="editor-panel-navprompt" class="editor-subpanel">
+            <div class="flex items-center justify-between mb-3">
+                <div class="text-[10px] text-zinc-500 font-mono">llm-game-agent/references/navigation-prompt.md</div>
+                <div class="flex items-center gap-2">
+                    <button onclick="loadNavPrompt()" class="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded flex items-center gap-1">
+                        <i class="fa-solid fa-sync text-[10px]"></i><span>Load</span>
+                    </button>
+                    <button onclick="saveNavPrompt()" class="text-xs px-4 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-save text-[10px]"></i><span>Save</span>
+                    </button>
+                </div>
+            </div>
+            <textarea id="nav-prompt-editor" class="prompt-editor" placeholder="Load the nav prompt to edit..."></textarea>
+        </div>
+
+        <!-- Sub-tab: prompts.py -->
+        <div id="editor-panel-promptspy" class="editor-subpanel">
+            <div class="flex items-center justify-between mb-3">
+                <div class="text-[10px] text-zinc-500 font-mono">pokemon-standalone-agent/src/llm/prompts.py (read-only)</div>
+                <button onclick="loadPromptsPy()" class="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded flex items-center gap-1">
+                    <i class="fa-solid fa-sync text-[10px]"></i><span>Load</span>
+                </button>
+            </div>
+            <pre id="prompts-py-display" class="code-viewer overflow-auto text-[13px] leading-[1.65] p-4 rounded-xl font-mono whitespace-pre-wrap border border-zinc-700 bg-zinc-900 text-zinc-200">Click "Load" to view prompts.py source...</pre>
+        </div>
+
+        <!-- Sub-tab: Autopilot Prompt -->
+        <div id="editor-panel-autopilot" class="editor-subpanel">
+            <div class="flex items-center justify-between mb-3">
+                <div class="text-[10px] text-zinc-500 font-mono">pokemon_agent/autopilot.py — TURN_PROMPT (read-only)</div>
+                <button onclick="loadAutopilotPrompt()" class="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded flex items-center gap-1">
+                    <i class="fa-solid fa-sync text-[10px]"></i><span>Load</span>
+                </button>
+            </div>
+            <textarea id="autopilot-prompt-editor" class="prompt-editor" style="min-height: calc(100vh - 220px);" placeholder="Load the autopilot prompt to view..." readonly></textarea>
+        </div>
+
+        <div class="text-center text-[10px] text-zinc-500 mt-4">
+            Guide editor — edits are saved directly to guide.json and prompt files on the server
+        </div>
+        </div><!-- end tab-panel editor -->
+
+        <div class="text-center text-[10px] text-zinc-500 mt-4">
+            Direct HTTP to <span class="font-mono text-emerald-400" id="footer-base-url">http://192.168.1.25:8765</span> • 
+            Supported: press_X, hold_X_N, walk_X, wait_N, a_until_dialog_end
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = window.location.origin;
+        let logContainer = null;
+        let guideData = null;
+        let editingStepId = null;
+
+        // Set footer URL
+        document.getElementById('footer-base-url').textContent = BASE_URL;
+
+        // ============================================================
+        // TAB SWITCHING
+        // ============================================================
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            document.getElementById('panel-' + name).classList.add('active');
+            if (name === 'editor') {
+                // Auto-load guide when switching to editor tab
+                if (!guideData) loadGuide();
+            }
+        }
+
+        // ============================================================
+        // EDITOR SUB-TAB SWITCHING
+        // ============================================================
+        function switchEditorTab(name) {
+            document.querySelectorAll('.editor-subtab').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.editor-subpanel').forEach(p => p.classList.remove('active'));
+            document.getElementById('editor-tab-' + name).classList.add('active');
+            document.getElementById('editor-panel-' + name).classList.add('active');
+        }
+
+        // ============================================================
+        // GUIDE EDITOR
+        // ============================================================
+        async function loadGuide() {
+            try {
+                const res = await fetch(`${BASE_URL}/editor/guide`);
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.detail || `HTTP ${res.status}`);
+                }
+                guideData = await res.json();
+                if (!guideData || !Array.isArray(guideData.steps)) {
+                    throw new Error('Invalid guide data: missing steps array');
+                }
+                document.getElementById('guide-step-count').textContent = guideData.steps.length + ' steps';
+                renderGuideSteps();
+            } catch (err) {
+                alert('Failed to load guide: ' + err.message);
+            }
+        }
+
+        function renderGuideSteps() {
+            const container = document.getElementById('guide-steps-list');
+            const filter = (document.getElementById('guide-filter').value || '').toLowerCase();
+            const catFilter = document.getElementById('guide-filter-category').value;
+            container.innerHTML = '';
+
+            guideData.steps.forEach((step, idx) => {
+                const matchesFilter = !filter ||
+                    step.id.toLowerCase().includes(filter) ||
+                    step.description.toLowerCase().includes(filter);
+                const matchesCat = !catFilter || step.category === catFilter;
+                if (!matchesFilter || !matchesCat) return;
+
+                const isEditing = editingStepId === step.id;
+                const card = document.createElement('div');
+                card.className = 'step-card' + (isEditing ? ' editing' : '');
+                card.id = 'step-card-' + step.id;
+
+                if (isEditing) {
+                    card.innerHTML = renderStepEditor(step, idx);
+                } else {
+                    card.innerHTML = renderStepViewer(step, idx);
+                }
+                container.appendChild(card);
+            });
+        }
+
+        function renderStepViewer(step, idx) {
+            const conds = step.state_conditions ? JSON.stringify(step.state_conditions, null, 2) : '{}';
+            const comps = step.completion_conditions ? JSON.stringify(step.completion_conditions, null, 2) : '{}';
+            const hints = (step.hints || []).join(' · ');
+            const tp = step.target_position ? `🎯 (${step.target_position[0]},${step.target_position[1]})` : '';
+            const catClass = step.category === 'battling' ? 'step-badge-battling' : 'step-badge-story';
+            return `
+                <div class="step-view-row">
+                    <div class="step-view-main">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-[10px] text-zinc-600 font-mono w-5">#${idx}</span>
+                            <span class="text-sm font-bold text-emerald-400 font-mono">${step.id}</span>
+                            <span class="step-badge ${catClass}">${step.category || '?'}</span>
+                            ${tp ? `<span class="text-[10px] text-amber-400 font-mono">${tp}</span>` : ''}
+                        </div>
+                        <div class="text-sm text-zinc-200 mb-2">${step.description}</div>
+                        <div class="step-json-preview mb-1" title="State conditions">${conds}</div>
+                        <div class="step-json-preview" title="Completion conditions">${comps}</div>
+                        ${hints ? `<div class="text-[11px] text-zinc-500 mt-2"><i class="fa-solid fa-lightbulb text-amber-500 mr-1"></i>${hints}</div>` : ''}
+                    </div>
+                    <div class="step-view-actions">
+                        <button onclick="editStep('${step.id}')" class="text-[11px] px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-400 hover:text-amber-400" title="Edit">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button onclick="moveStep(${idx}, -1)" class="text-[11px] px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-400" title="Move up">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </button>
+                        <button onclick="moveStep(${idx}, 1)" class="text-[11px] px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-400" title="Move down">
+                            <i class="fa-solid fa-arrow-down"></i>
+                        </button>
+                        <button onclick="deleteStep('${step.id}')" class="text-[11px] px-2 py-1.5 bg-zinc-800 hover:bg-red-900 rounded text-zinc-400 hover:text-red-400" title="Delete">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStepEditor(step, idx) {
+            const conds = JSON.stringify(step.state_conditions || {}, null, 2);
+            const comps = JSON.stringify(step.completion_conditions || {}, null, 2);
+            const hints = (step.hints || []).join('\n');
+            const tp = step.target_position || [];
+            return `
+                <div class="space-y-4">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-[10px] text-zinc-600 font-mono">#${idx}</span>
+                        <span class="text-xs text-amber-400 font-mono">Editing</span>
+                    </div>
+                    <div class="step-field">
+                        <label>Step ID</label>
+                        <input class="step-field-input" value="${step.id}" onchange="updateStepField('${step.id}', 'id', this.value)">
+                    </div>
+                    <div class="step-field">
+                        <label>Description</label>
+                        <textarea class="step-field-textarea" rows="3" onchange="updateStepField('${step.id}', 'description', this.value)">${step.description}</textarea>
+                    </div>
+                    <div class="step-field">
+                        <label>Category</label>
+                        <select class="step-field-input" onchange="updateStepField('${step.id}', 'category', this.value)">
+                            <option value="story" ${step.category === 'story' ? 'selected' : ''}>story</option>
+                            <option value="battling" ${step.category === 'battling' ? 'selected' : ''}>battling</option>
+                        </select>
+                    </div>
+                    <div class="step-field">
+                        <label>State Conditions (JSON)</label>
+                        <textarea class="step-field-textarea" rows="8" onchange="updateStepJsonField('${step.id}', 'state_conditions', this.value)">${conds}</textarea>
+                    </div>
+                    <div class="step-field">
+                        <label>Completion Conditions (JSON)</label>
+                        <textarea class="step-field-textarea" rows="8" onchange="updateStepJsonField('${step.id}', 'completion_conditions', this.value)">${comps}</textarea>
+                    </div>
+                    <div class="step-field">
+                        <label>Target Position [x, y] (optional)</label>
+                        <input class="step-field-input" value="[${tp[0] || ''}, ${tp[1] || ''}]" placeholder="[7, 1]" onchange="updateStepTargetPos('${step.id}', this.value)">
+                    </div>
+                    <div class="step-field">
+                        <label>Hints (one per line)</label>
+                        <textarea class="step-field-textarea" rows="8" onchange="updateStepHints('${step.id}', this.value)">${hints}</textarea>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="doneEditing('${step.id}')" class="text-xs px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded font-semibold">
+                            <i class="fa-solid fa-check mr-1"></i>Done
+                        </button>
+                        <button onclick="cancelEditing()" class="text-xs px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function editStep(id) {
+            editingStepId = id;
+            renderGuideSteps();
+        }
+
+        async function doneEditing(id) {
+            editingStepId = null;
+            renderGuideSteps();
+            // Auto-save changes to server
+            await saveGuide();
+        }
+
+        function cancelEditing() {
+            editingStepId = null;
+            renderGuideSteps();
+        }
+
+        function updateStepField(id, field, value) {
+            const step = guideData.steps.find(s => s.id === id);
+            if (step) step[field] = value;
+        }
+
+        function updateStepJsonField(id, field, value) {
+            const step = guideData.steps.find(s => s.id === id);
+            if (step) {
+                try { step[field] = JSON.parse(value); } catch(e) { /* ignore invalid json while typing */ }
+            }
+        }
+
+        function updateStepTargetPos(id, value) {
+            const step = guideData.steps.find(s => s.id === id);
+            if (step) {
+                try {
+                    const parsed = JSON.parse(value);
+                    if (Array.isArray(parsed) && parsed.length === 2) {
+                        step.target_position = [parseInt(parsed[0]), parseInt(parsed[1])];
+                    }
+                } catch(e) {
+                    // ignore invalid input while typing
+                }
+            }
+        }
+
+        function updateStepHints(id, value) {
+            const step = guideData.steps.find(s => s.id === id);
+            if (step) step.hints = value.split('\n').map(h => h.trim()).filter(Boolean);
+        }
+
+        function moveStep(idx, dir) {
+            const newIdx = idx + dir;
+            if (newIdx < 0 || newIdx >= guideData.steps.length) return;
+            const tmp = guideData.steps[idx];
+            guideData.steps[idx] = guideData.steps[newIdx];
+            guideData.steps[newIdx] = tmp;
+            renderGuideSteps();
+        }
+
+        function deleteStep(id) {
+            if (!confirm('Delete step "' + id + '"?')) return;
+            guideData.steps = guideData.steps.filter(s => s.id !== id);
+            renderGuideSteps();
+        }
+
+        function addNewStep() {
+            const id = 'NEW_STEP_' + Date.now();
+            guideData.steps.push({
+                id: id,
+                description: 'New step description',
+                category: 'story',
+                state_conditions: { map_name: '?' },
+                completion_conditions: { map_name: '?' },
+                hints: []
+            });
+            renderGuideSteps();
+            editStep(id);
+        }
+
+        function filterGuide() {
+            renderGuideSteps();
+        }
+
+        async function saveGuide() {
+            try {
+                // Validate all JSON fields before saving
+                for (const step of guideData.steps) {
+                    if (step.state_conditions && typeof step.state_conditions === 'string') {
+                        try { step.state_conditions = JSON.parse(step.state_conditions); } catch(e) {
+                            throw new Error(`Step "${step.id}": invalid state_conditions JSON`);
+                        }
+                    }
+                    if (step.completion_conditions && typeof step.completion_conditions === 'string') {
+                        try { step.completion_conditions = JSON.parse(step.completion_conditions); } catch(e) {
+                            throw new Error(`Step "${step.id}": invalid completion_conditions JSON`);
+                        }
+                    }
+                }
+                const res = await fetch(`${BASE_URL}/editor/guide`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ steps: guideData.steps })
+                });
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                if (data.success) {
+                    alert('Guide saved! (' + data.step_count + ' steps)');
+                } else {
+                    alert('Save failed: ' + (data.detail || 'unknown error'));
+                }
+            } catch (err) {
+                alert('Save failed: ' + err.message);
+            }
+        }
+
+        // ============================================================
+        // NAV PROMPT EDITOR
+        // ============================================================
+        async function loadNavPrompt() {
+            try {
+                const res = await fetch(`${BASE_URL}/editor/prompts`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                document.getElementById('nav-prompt-editor').value = data.nav_prompt_md || '';
+            } catch (err) {
+                alert('Failed to load prompts: ' + err.message);
+            }
+        }
+
+        async function saveNavPrompt() {
+            const content = document.getElementById('nav-prompt-editor').value;
+            try {
+                const res = await fetch(`${BASE_URL}/editor/nav-prompt`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                if (data.success) {
+                    alert('Nav prompt saved!');
+                } else {
+                    alert('Save failed');
+                }
+            } catch (err) {
+                alert('Save failed: ' + err.message);
+            }
+        }
+
+        // ============================================================
+        // AUTOPILOT PROMPT VIEWER
+        // ============================================================
+        async function loadAutopilotPrompt() {
+            try {
+                const res = await fetch(`${BASE_URL}/editor/autopilot-prompt`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                document.getElementById('autopilot-prompt-editor').value = data.turn_prompt || '';
+            } catch (err) {
+                alert('Failed to load autopilot prompt: ' + err.message);
+            }
+        }
+
+        // ============================================================
+        // PROMPTS.PY VIEWER
+        // ============================================================
+        async function loadPromptsPy() {
+            try {
+                const res = await fetch(`${BASE_URL}/editor/prompts`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                document.getElementById('prompts-py-display').textContent = data.prompts_py || '';
+            } catch (err) {
+                alert('Failed to load prompts.py: ' + err.message);
+            }
+        }
+
+        // ============================================================
+        // CONTROLLER (existing code, slightly adapted)
+        // ============================================================
+        let turnCount = 0;
+
+        function init() {
+            logContainer = document.getElementById('action-log');
+            pingServer();
+            
+            // Keyboard support (basic)
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+                
+                const keyMap = {
+                    'a': 'press_a',
+                    'b': 'press_b',
+                    's': 'press_start',
+                    'ArrowUp': 'press_up',
+                    'ArrowDown': 'press_down',
+                    'ArrowLeft': 'press_left',
+                    'ArrowRight': 'press_right',
+                    ' ': 'press_a'
+                };
+                
+                if (keyMap[e.key]) {
+                    e.preventDefault();
+                    sendAction(keyMap[e.key]);
+                }
+            });
+            
+            console.log('%c[Pokemon Controller] Ready.', 'color:#4ade80');
+            setInterval(pollControlState, 3000);
+        }
+
+        async function pingServer() {
+            const statusEl = document.getElementById('status-text');
+            try {
+                const res = await fetch(`${BASE_URL}/health`);
+                const data = await res.json();
+                
+                if (data.emulator_ready) {
+                    statusEl.innerHTML = `Connected • emulator ready`;
+                    statusEl.classList.add('text-emerald-400');
+                } else {
+                    statusEl.innerHTML = `Connected (emulator not ready)`;
+                }
+            } catch (err) {
+                statusEl.innerHTML = `OFFLINE - ${err.message}`;
+                statusEl.classList.remove('text-emerald-400');
+                statusEl.classList.add('text-red-400');
+            }
+        }
+
+        // --- Autopilot control ---
+        let autopilotState = 'stopped';
+
+        async function toggleAutopilot() {
+            if (autopilotState === 'running' || autopilotState === 'paused') {
+                try {
+                    await fetch(`${BASE_URL}/agent/stop`, { method: 'POST' });
+                    autopilotState = 'stopped';
+                    updateAutopilotButton();
+                    logAction(['AUTOPILOT'], { success: true, message: 'Agent stopped' });
+                } catch (err) {
+                    logAction(['AUTOPILOT'], { success: false, message: err.message });
+                }
+            } else {
+                try {
+                    const startRes = await fetch(`${BASE_URL}/agent/start?new_game=true`, { method: 'POST' });
+                    const startData = await startRes.json();
+                    if (startData.success) {
+                        logAction(['AUTOPILOT'], { success: true, message: `Agent started (pid ${startData.pid})` });
+                        autopilotState = 'running';
+                        updateAutopilotButton();
+                    }
+                } catch (err) {
+                    logAction(['AUTOPILOT'], { success: false, message: err.message });
+                }
+            }
+        }
+
+        function updateAutopilotButton() {
+            const btn = document.getElementById('btn-autopilot');
+            const label = document.getElementById('autopilot-label');
+            const icon = document.getElementById('autopilot-icon');
+            if (!btn) return;
+
+            if (autopilotState === 'running') {
+                btn.className = 'px-5 py-2 bg-red-700 hover:bg-red-600 border border-red-500 rounded-lg text-sm font-semibold flex items-center gap-x-2 text-white';
+                label.textContent = 'STOP AGENT';
+                icon.className = 'fa-solid fa-stop';
+            } else if (autopilotState === 'paused') {
+                btn.className = 'px-5 py-2 bg-amber-700 hover:bg-amber-600 border border-amber-500 rounded-lg text-sm font-semibold flex items-center gap-x-2 text-white';
+                label.textContent = 'RESUME AGENT';
+                icon.className = 'fa-solid fa-play';
+            } else {
+                btn.className = 'px-5 py-2 bg-emerald-700 hover:bg-emerald-600 border border-emerald-500 rounded-lg text-sm font-semibold flex items-center gap-x-2 text-white';
+                label.textContent = 'START AGENT';
+                icon.className = 'fa-solid fa-robot';
+            }
+        }
+
+        async function pollControlState() {
+            try {
+                const res = await fetch(`${BASE_URL}/agent/status`);
+                const data = await res.json();
+                const newState = data.running ? 'running' : 'stopped';
+                if (newState !== autopilotState) {
+                    autopilotState = newState;
+                    updateAutopilotButton();
+                }
+            } catch (_) {}
+        }
+
+        async function sendActions(actions, thought = "manual input from controller") {
+            try {
+                const res = await fetch(`${BASE_URL}/action`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ actions, thought })
+                });
+                
+                const result = await res.json();
+                logAction(actions, result);
+                turnCount++;
+                document.getElementById('turn-counter').textContent = turnCount + ' turns';
+                
+                setTimeout(() => {
+                    if (document.getElementById('state-display').textContent !== "Click \"Refresh\" to load state...") {
+                        fetchState(true);
+                    }
+                }, 400);
+                
+                return result;
+            } catch (err) {
+                logAction(actions, { error: err.message });
+                alert("Failed to send action: " + err.message);
+            }
+        }
+
+        function sendAction(action) {
+            sendActions([action]);
+        }
+
+        function sendHoldB() {
+            const frames = parseInt(document.getElementById('hold-b-frames').value) || 1000;
+            sendActions([`hold_b_${frames}`], `manual hold b for ${frames} frames`);
+        }
+
+        function quickHoldB(frames) {
+            document.getElementById('hold-b-frames').value = frames;
+            sendActions([`hold_b_${frames}`], `quick hold b ${frames}`);
+        }
+
+        function sendCustomSequence() {
+            const input = document.getElementById('custom-sequence').value.trim();
+            if (!input) return;
+            const actions = input.split(',').map(a => a.trim()).filter(Boolean);
+            if (actions.length === 0) return;
+            sendActions(actions, "custom sequence from controller");
+        }
+
+        async function sendSequence(actions) {
+            await sendActions(actions, "quick helper sequence");
+        }
+
+        async function fetchState(silent = false) {
+            const display = document.getElementById('state-display');
+            const asciiMapEl = document.getElementById('ascii-map');
+            const parsedEl = document.getElementById('parsed-state');
+            display.textContent = "Loading state...";
+            asciiMapEl.textContent = "Loading...";
+            parsedEl.textContent = "Loading...";
+            
+            try {
+                const res = await fetch(`${BASE_URL}/state`);
+                const state = await res.json();
+                display.textContent = JSON.stringify(state, null, 2);
+
+                if (state.collision && state.collision.ascii) {
+                    asciiMapEl.textContent = state.collision.ascii;
+                } else {
+                    asciiMapEl.textContent = "(no collision data — battle or indoor map)";
+                }
+
+                const lines = [];
+                const mapName = state.map?.map_name || "?";
+                const mapId = state.map?.map_id || "?";
+                const pos = state.player?.position || {};
+                const px = pos.x != null ? pos.x : "?";
+                const py = pos.y != null ? pos.y : "?";
+                lines.push(`Map: ${mapName} (${mapId})`);
+                lines.push(`Pos: (${px}, ${py})  Facing: ${state.player?.facing || "?"}`);
+                lines.push(`Party: ${state.party?.length || 0}  Badges: ${state.player?.badge_count || 0}  Money: ₽${state.player?.money || 0}`);
+                if (state.party && state.party.length > 0) {
+                    for (const mon of state.party) {
+                        lines.push(`  ${mon.species || "?"} Lv${mon.level || "?"} HP ${mon.hp}/${mon.max_hp} ${mon.status && mon.status !== "OK" ? mon.status : ""}`.trim());
+                    }
+                }
+                if (state.dialog?.active) {
+                    lines.push(`Dialog: ${state.dialog.text || "(active)"}`);
+                }
+                if (state.battle?.in_battle) {
+                    const b = state.battle;
+                    lines.push(`Battle: ${b.type || "?"} vs ${b.enemy?.species || "?"} Lv${b.enemy?.level || "?"}`);
+                }
+                if (state.collision) {
+                    lines.push(`Warps: ${(state.warps || []).length}  Sprites: ${(state.sprites || []).length}`);
+                }
+                parsedEl.textContent = lines.join("\n");
+            } catch (err) {
+                display.textContent = "Error fetching state:\n" + err.message;
+                asciiMapEl.textContent = "Error: " + err.message;
+                parsedEl.textContent = "Error: " + err.message;
+                if (!silent) alert("Failed to fetch state");
+            }
+        }
+
+        async function fetchScreenshot() {
+            const img = document.getElementById('screenshot-img');
+            const placeholder = document.getElementById('screenshot-placeholder');
+            placeholder.innerHTML = '<div class="text-emerald-700">Capturing...</div>';
+            try {
+                const res = await fetch(`${BASE_URL}/screenshot/base64`);
+                const data = await res.json();
+                img.src = `data:image/png;base64,${data.image}`;
+                img.classList.remove('hidden');
+                placeholder.style.display = 'none';
+            } catch (err) {
+                placeholder.innerHTML = `<div class="text-red-400 text-xs">Failed to capture<br>${err.message}</div>`;
+            }
+        }
+
+        async function saveState() {
+            const name = document.getElementById('savestate-name').value.trim() || 'manual-save';
+            try {
+                const res = await fetch(`${BASE_URL}/save`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name })
+                });
+                const result = await res.json();
+                logAction([`save:${name}`], result);
+                alert(`Saved as "${name}"`);
+            } catch (err) {
+                alert("Save failed: " + err.message);
+            }
+        }
+
+        async function loadState() {
+            const name = document.getElementById('savestate-name').value.trim() || 'manual-save';
+            try {
+                const res = await fetch(`${BASE_URL}/load`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name })
+                });
+                const result = await res.json();
+                logAction([`load:${name}`], result);
+                setTimeout(fetchState, 300);
+            } catch (err) {
+                alert("Load failed: " + err.message);
+            }
+        }
+
+        function logAction(actions, result) {
+            if (!logContainer) return;
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry border-l-2 border-emerald-700 pl-2 py-0.5';
+            let html = `<span class="text-emerald-400">[${time}]</span> `;
+            html += `<span class="text-amber-300">${actions.join(', ')}</span>`;
+            if (result && result.error) {
+                html += ` <span class="text-red-400">ERROR: ${result.error}</span>`;
+            } else if (result) {
+                html += ` <span class="text-emerald-700">✓</span>`;
+            }
+            entry.innerHTML = html;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            while (logContainer.children.length > 25) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+
+        function clearLog() {
+            if (logContainer) logContainer.innerHTML = '';
+        }
+
+        // Boot
+        window.onload = init;
+    </script>
+</body>
+</html>

@@ -364,6 +364,18 @@ async def _startup():
         # Config can be injected via environment or set beforehand
         print("[server] WARNING: No GameConfig set — emulator will NOT start.")
         print("[server] Call server.configure(GameConfig(...)) before startup.")
+        # Mount manual controller even without config so it's accessible
+        try:
+            # Path: pokemon_agent/server/app.py → pokemon_agent/ → project root
+            ctrl_html = Path(__file__).parent.parent.parent / "manual-controller.html"
+            if ctrl_html.exists():
+                from fastapi.responses import HTMLResponse
+                @app.get("/controller/", response_class=HTMLResponse)
+                async def serve_controller():
+                    return HTMLResponse(content=ctrl_html.read_text(), status_code=200)
+                print("[server] Manual controller at /controller/")
+        except Exception as e:
+            print(f"[server] Manual controller not mounted: {e}")
         return
 
     rom = Path(_config.rom_path).expanduser().resolve()
@@ -402,12 +414,10 @@ async def _startup():
     from pokemon_agent.server.sessions import GameSessionManager
     _session_mgr = GameSessionManager(str(data_dir))
 
-    # Mount manual controller at /controller/
+    # Mount manual controller at /controller/ (config is set, normal operation)
     try:
-        import pokemon_agent.dashboard as dashboard_mod
-        ctrl_dir = Path(dashboard_mod.__file__).parent / "static"
-        # Also serve the manual-controller.html from the project root
-        ctrl_html = Path(__file__).parent.parent / "manual-controller.html"
+        # Path: pokemon_agent/server/app.py → pokemon_agent/ → project root
+        ctrl_html = Path(__file__).parent.parent.parent / "manual-controller.html"
         if ctrl_html.exists():
             from fastapi.responses import HTMLResponse
             @app.get("/controller/", response_class=HTMLResponse)

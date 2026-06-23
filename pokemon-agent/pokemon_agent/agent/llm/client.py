@@ -55,7 +55,7 @@ class LLMClient:
         api_key: str = "not-needed",
         model: str = "default",
         temperature: float = 0.7,
-        max_tokens: int = 1024,
+        max_tokens: int = 8192,
         timeout: int = 120,
         vision_fallback_models: Optional[list[str]] = None,
         providers: Optional[Dict[str, Dict[str, str]]] = None,
