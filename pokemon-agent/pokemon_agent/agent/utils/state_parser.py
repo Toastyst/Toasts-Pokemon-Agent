@@ -125,14 +125,13 @@ def is_walkable(state: Dict[str, Any], x: int, y: int) -> bool:
     else:
         return False  # out of grid bounds
 
-    # Check sprite collision — only NPCs block movement.
-    # Items are walkable (you walk up to them and press A to interact).
+    # Check sprite collision — NPCs and items block movement.
+    # Items/pokeballs are NOT walkable in Gen 1 — you must stand on an
+    # adjacent tile and press A to interact.
     for sprite in state.get("sprites", []):
         sx, sy = sprite.get("x"), sprite.get("y")
         if sx == x and sy == y:
-            if sprite.get("type") == "npc":
-                return False  # NPCs block movement
-            # Items do NOT block — agent walks to them and interacts
+            return False  # sprite blocks this tile
 
     return True
 

@@ -204,6 +204,10 @@ If your last action was blocked (didn't move), try a DIFFERENT direction that is
 
 DOORMAT EXITS: If you are standing on a D (doormat) tile, press_down to exit. The server overrides collision for doormat exits — it's OK if the tile below shows #.
 
+CONNECTED MAPS: Some maps are connected without warp tiles (e.g., Pallet Town ↔ Route 1). To transition between connected maps, walk to the edge of the current map in the direction of the destination. There is NO "exit tile" — the map name changes automatically when you cross the boundary. If the objective says "go to Route 1" and you're in Pallet Town, just walk north until the map name changes.
+
+BUILDING ENTRANCES: Warps labeled "building entrance" lead INTO a building (e.g., "→ Red's House 1F"). Do NOT use these unless the objective specifically says to enter that building. To EXIT a building, look for a D (doormat) tile or an "exit to outside" warp.
+
 OUTPUT FORMAT RULES (STRICT):
 - Write 1-3 sentences of reasoning. Explain WHY this action advances the objective.
 - The VERY LAST LINE of your entire response must contain ONLY the action name.
@@ -291,7 +295,16 @@ def build_navigation_prompt(
                     for w in warps:
                         wx, wy = w.get("x", "?"), w.get("y", "?")
                         dest = w.get("dest_name", "?")
-                        tile_type = "doormat" if w.get("dest_name") == "Map 255" else "stairs/warp"
+                        dest_map = w.get("dest_map", -1)
+                        outdoor_keywords = ["route", "town", "city", "island", "plateau"]
+                        is_outdoor = any(kw in dest.lower() for kw in outdoor_keywords)
+                        is_doormat = dest_map == 255
+                        if is_doormat:
+                            tile_type = "doormat (exit to outside)"
+                        elif is_outdoor:
+                            tile_type = "map exit"
+                        else:
+                            tile_type = "building entrance"
                         warp_lines.append(f"  ({wx},{wy}) → {dest} ({tile_type})")
                     warp_hint = "\nAvailable warps/exits:\n" + "\n".join(warp_lines)
             suggest_text = (f"★★★ GPS has no specific target coordinate. "
@@ -302,31 +315,40 @@ def build_navigation_prompt(
     # Add off-screen target info if GPS is guiding toward a warp that's not visible
     offscreen_text = ""
     if suggested_direction and game_state and suggested_direction.startswith("press_"):
-        # Check if there's a warp the GPS might be guiding toward that's off-screen
         dir_map = {"press_up": (0,-1), "press_down": (0,1), "press_left": (-1,0), "press_right": (1,0)}
         ddx, ddy = dir_map.get(suggested_direction, (0,0))
         px = game_state.get("x", 0)
         py = game_state.get("y", 0)
-        # Look for warps in the suggested direction that are outside the viewport
+        current_map_name = game_state.get("map_name", "")
         for w in game_state.get("warps", []):
             wx, wy = w.get("x", 0), w.get("y", 0)
-            # Check if warp is in the suggested direction
             in_dir = False
-            if ddx > 0 and wx > px:
-                in_dir = True
-            elif ddx < 0 and wx < px:
-                in_dir = True
-            elif ddy > 0 and wy > py:
-                in_dir = True
-            elif ddy < 0 and wy < py:
-                in_dir = True
-            if in_dir:
-                dist = abs(wx - px) + abs(wy - py)
-                if dist > 5:  # outside viewport range
-                    dest = w.get("dest_name", "exit")
-                    tile_type = "doormat" if w.get("dest_map") == 255 else "stairs/warp"
-                    offscreen_text = f"\n★ EXIT TILE ({tile_type}) at ({wx},{wy}) is {dist} tiles away in the {suggested_direction.replace('press_','')} direction — keep moving that way!"
-                    break
+            if ddx > 0 and wx > px: in_dir = True
+            elif ddx < 0 and wx < px: in_dir = True
+            elif ddy > 0 and wy > py: in_dir = True
+            elif ddy < 0 and wy < py: in_dir = True
+            if not in_dir:
+                continue
+            dist = abs(wx - px) + abs(wy - py)
+            if dist > 5:
+                dest = w.get("dest_name", "?")
+                dest_map = w.get("dest_map", -1)
+                # Classify the warp: building entrance vs map exit vs doormat
+                outdoor_keywords = ["route", "town", "city", "island", "plateau"]
+                is_outdoor = any(kw in dest.lower() for kw in outdoor_keywords)
+                is_doormat = dest_map == 255
+                if is_doormat:
+                    tile_type = "doormat (exit)"
+                elif is_outdoor:
+                    tile_type = "map exit"
+                else:
+                    tile_type = "building entrance"
+                # Only highlight as an exit if it leads to an outdoor map or is a doormat
+                if is_outdoor or is_doormat:
+                    offscreen_text = f"\n★ EXIT TILE ({tile_type}) at ({wx},{wy}) is {dist} tiles away — keep moving {suggested_direction.replace('press_','')}!"
+                else:
+                    offscreen_text = f"\n★ Warp to {dest} ({tile_type}) at ({wx},{wy}) is {dist} tiles away — keep moving {suggested_direction.replace('press_','')}!"
+                break
 
     # Build failure memory warning — only show if the blocked direction is
     # still relevant (same map, and the direction is currently walkable but
