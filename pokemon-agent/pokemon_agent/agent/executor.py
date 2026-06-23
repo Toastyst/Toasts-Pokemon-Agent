@@ -253,8 +253,7 @@ class Executor:
                     queue.append((nx, ny, actions + [action_name]))
         else:
             # Target not visible or target is a warp tile (marked not-walkable in grid)
-            # Greedy walk in target direction. Do NOT check walkability since the
-            # target is off-grid and we can't see the tiles. The server handles collision.
+            # Greedy walk in target direction, but check walkability of each step
             actions = []
             cx, cy = start_x, start_y
             for _ in range(max_steps):
@@ -269,10 +268,30 @@ class Executor:
                 else:
                     if dx < 0: action = "walk_left"
                     else: action = "walk_right"
+                # Check walkability before committing to this step
+                dir_to_delta = {
+                    "walk_up": (0, -1), "walk_down": (0, 1),
+                    "walk_left": (-1, 0), "walk_right": (1, 0),
+                }
+                ddx, ddy = dir_to_delta[action]
+                if not is_walkable(state, cx + ddx, cy + ddy):
+                    # Primary direction blocked — try perpendicular
+                    if action in ("walk_up", "walk_down"):
+                        alt_actions = ["walk_left", "walk_right"]
+                    else:
+                        alt_actions = ["walk_up", "walk_down"]
+                    found_alt = False
+                    for alt in alt_actions:
+                        adx, ady = dir_to_delta[alt]
+                        if is_walkable(state, cx + adx, cy + ady):
+                            action = alt
+                            ddx, ddy = adx, ady
+                            found_alt = True
+                            break
+                    if not found_alt:
+                        break  # Completely stuck
                 actions.append(action)
-                # Simulate the move (don't execute, just track position)
-                adx, ady = {"walk_up":(0,-1),"walk_down":(0,1),"walk_left":(-1,0),"walk_right":(1,0)}[action]
-                cx, cy = cx + adx, cy + ady
+                cx, cy = cx + ddx, cy + ddy
             return actions
         return []
 

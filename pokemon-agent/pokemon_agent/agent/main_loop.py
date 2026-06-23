@@ -36,6 +36,7 @@ from pokemon_agent.agent.config import load_config, get_pokemon_agent_config
 from pokemon_agent.agent.llm.client import LLMClient
 from pokemon_agent.agent.llm.agents import GuideAgent, NavigationAgent, CritiqueAgent
 from pokemon_agent.agent.executor import Executor
+from pokemon_agent.agent.utils.state_parser import is_walkable as _is_walkable
 from pokemon_agent.agent.utils.dashboard import push_objectives, push_event, push_token
 from pokemon_agent.agent.memory.store import PokemonMemory, DialogFact, BattleLogEntry
 
@@ -163,7 +164,12 @@ class StandaloneAgent:
         return self._control_state
 
     def _load_guide(self):
-        guide_path = Path("guide.json")
+        # Look for guide.json relative to the module location, not CWD
+        module_dir = Path(__file__).parent.parent  # pokemon_agent/
+        guide_path = module_dir / "guide" / "guide.json"
+        if not guide_path.exists():
+            # Fallback to CWD for backward compatibility
+            guide_path = Path("guide.json")
         if guide_path.exists():
             with open(guide_path) as f:
                 data = json.load(f)
@@ -415,7 +421,8 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
 
     def _compute_astar_path(self, game_state: Dict[str, Any],
                             target_position: Optional[Tuple[int, int]],
-                            max_steps: int = 10) -> List[str]:
+                            max_steps: int = 10,
+                            suggested_direction: Optional[str] = None) -> List[str]:
         """Compute A* path from current position toward target.
 
         Uses the executor's BFS pathfinding which handles both on-grid
@@ -423,8 +430,33 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         no target or no path found. Does NOT execute anything.
         """
         if target_position is None:
-            # No explicit target — try to path toward suggested_direction
-            # for a few steps to give the LLM a starting route
+            # No explicit target — if GPS has a suggested direction, compute
+            # a short path in that direction to give the LLM a starting route
+            if suggested_direction and suggested_direction.startswith("press_"):
+                dir_to_delta = {
+                    "press_up": (0, -1), "press_down": (0, 1),
+                    "press_left": (-1, 0), "press_right": (1, 0),
+                }
+                dx, dy = dir_to_delta.get(suggested_direction, (0, 0))
+                if dx != 0 or dy != 0:
+                    px, py = game_state.get("x", 0), game_state.get("y", 0)
+                    # Walk up to max_steps in the suggested direction (or until blocked)
+                    actions = []
+                    cx, cy = px, py
+                    for _ in range(max_steps):
+                        nx, ny = cx + dx, cy + dy
+                        if not _is_walkable(game_state, nx, ny):
+                            break
+                        if dx > 0:
+                            actions.append("walk_right")
+                        elif dx < 0:
+                            actions.append("walk_left")
+                        elif dy > 0:
+                            actions.append("walk_down")
+                        else:
+                            actions.append("walk_up")
+                        cx, cy = nx, ny
+                    return actions
             return []
         current_x = game_state.get("x", 0)
         current_y = game_state.get("y", 0)
@@ -591,7 +623,8 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
 
         # --- P0b: Compute A* path and store for prompt injection ---
         self.planned_path = self._compute_astar_path(
-            game_state, target_position, max_steps=8)
+            game_state, target_position, max_steps=8,
+            suggested_direction=suggested_direction)
         if self.planned_path:
             print(f"  [A*] Planned route ({len(self.planned_path)} steps): "
                   f"{', '.join(self.planned_path[:5])}"

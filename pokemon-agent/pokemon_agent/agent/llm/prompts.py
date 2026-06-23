@@ -276,14 +276,26 @@ def build_navigation_prompt(
 
     starter_line = f"\nChosen starter: {chosen_starter}" if chosen_starter else ""
 
-    # When GPS returns None, the player is facing the target — press A now.
-    # When GPS returns a direction, it's a HINT — the LLM should use the collision
-    # grid to decide if that direction makes sense for the objective.
+    # When GPS returns None, provide context about available warps so the LLM
+    # can make an informed decision about which direction to go.
     if suggested_direction is None:
         if chosen_starter:
             suggest_text = "★★★ YOU ARE FACING YOUR TARGET! Press press_a NOW to interact! ★★★"
         else:
-            suggest_text = "★★★ GPS has no specific target. Use the objective + collision grid to pick the best direction. ★★★"
+            # Show available warps to help the LLM decide
+            warp_hint = ""
+            if game_state:
+                warps = game_state.get("warps", [])
+                if warps:
+                    warp_lines = []
+                    for w in warps:
+                        wx, wy = w.get("x", "?"), w.get("y", "?")
+                        dest = w.get("dest_name", "?")
+                        tile_type = "doormat" if w.get("dest_name") == "Map 255" else "stairs/warp"
+                        warp_lines.append(f"  ({wx},{wy}) → {dest} ({tile_type})")
+                    warp_hint = "\nAvailable warps/exits:\n" + "\n".join(warp_lines)
+            suggest_text = (f"★★★ GPS has no specific target coordinate. "
+                           f"Use the objective + collision grid to pick the best direction.{warp_hint} ★★★")
     else:
         suggest_text = f"GPS suggests: {suggested_direction} (hint only — verify against the map grid and objective)"
 
