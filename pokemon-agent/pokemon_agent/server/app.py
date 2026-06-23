@@ -341,6 +341,25 @@ async def _startup():
     _loop = asyncio.get_running_loop()
     _start_time = time.time()
 
+    # Try mounting dashboard (do this regardless of config so UI is always available)
+    try:
+        import pokemon_agent.dashboard as dashboard_mod  # noqa: F401
+        from fastapi.staticfiles import StaticFiles
+        dash_dir = Path(dashboard_mod.__file__).parent / "static"
+        if dash_dir.is_dir():
+            app.mount("/dashboard", StaticFiles(directory=str(dash_dir), html=True), name="dashboard")
+            print(f"[server] Dashboard mounted at /dashboard")
+
+            @app.get("/dashboard", include_in_schema=False)
+            async def dashboard_redirect():
+                from fastapi.responses import RedirectResponse
+                return RedirectResponse(url="/dashboard/")
+        else:
+            print("[server] Dashboard module found but no static/ directory")
+    except ImportError:
+        print("[server] Dashboard not installed — /dashboard unavailable")
+        print("[server]   Install with: pip install pokemon-agent[dashboard]")
+
     if _config is None:
         # Config can be injected via environment or set beforehand
         print("[server] WARNING: No GameConfig set — emulator will NOT start.")
@@ -382,25 +401,6 @@ async def _startup():
     global _session_mgr
     from pokemon_agent.server.sessions import GameSessionManager
     _session_mgr = GameSessionManager(str(data_dir))
-
-    # Try mounting dashboard
-    try:
-        import pokemon_agent.dashboard as dashboard_mod  # noqa: F401
-        from fastapi.staticfiles import StaticFiles
-        dash_dir = Path(dashboard_mod.__file__).parent / "static"
-        if dash_dir.is_dir():
-            app.mount("/dashboard", StaticFiles(directory=str(dash_dir), html=True), name="dashboard")
-            print(f"[server] Dashboard mounted at /dashboard")
-
-            @app.get("/dashboard", include_in_schema=False)
-            async def dashboard_redirect():
-                from fastapi.responses import RedirectResponse
-                return RedirectResponse(url="/dashboard/")
-        else:
-            print("[server] Dashboard module found but no static/ directory")
-    except ImportError:
-        print("[server] Dashboard not installed — /dashboard unavailable")
-        print("[server]   Install with: pip install pokemon-agent[dashboard]")
 
     # Mount manual controller at /controller/
     try:
@@ -783,7 +783,7 @@ def _write_agent_model_to_config(provider: str, model: str) -> None:
     and agent all agree on what model to use.
     """
     import yaml as _yaml
-    config_path = Path.home() / "projects" / "pokemon-standalone-agent" / "config.yaml"
+    config_path = Path.home() / "projects" / "pokemon-agent" / "config.yaml"
     if not config_path.exists():
         return
     with open(config_path) as f:
@@ -802,7 +802,7 @@ def _write_agent_model_to_config(provider: str, model: str) -> None:
 def _read_agent_model_from_config() -> dict:
     """Read the current provider/model from config.yaml."""
     import yaml as _yaml
-    config_path = Path.home() / "projects" / "pokemon-standalone-agent" / "config.yaml"
+    config_path = Path.home() / "projects" / "pokemon-agent" / "config.yaml"
     if not config_path.exists():
         return {}
     with open(config_path) as f:
@@ -831,7 +831,7 @@ async def agent_status():
 
 @app.post("/agent/start")
 async def agent_start(new_game: bool = False):
-    """Start the standalone pokemon-standalone-agent loop as a background process.
+    """Start the standalone pokemon-agent loop as a background process.
 
     Idempotent: if the agent is already running this returns immediately.
     The agent respects /control (pause/stop) so you can manage it from the
@@ -855,14 +855,14 @@ async def agent_start(new_game: bool = False):
     # Kill any leftover agent processes.
     try:
         subprocess.run(
-            ["pkill", "-f", "src.main_loop"],
+            ["pkill", "-f", "pokemon_agent.agent.main_loop"],
             timeout=5, capture_output=True,
         )
     except Exception:
         pass
     await asyncio.sleep(0.5)
-    # Spawn the standalone agent (pokemon-standalone-agent) in its own session.
-    standalone_dir = Path.home() / "projects" / "pokemon-standalone-agent"
+    # Spawn the standalone agent (pokemon-agent) in its own session.
+    agent_dir = Path.home() / "projects" / "pokemon-agent"
     log_path = Path("/tmp/pokemon-agent-stdout.log")
     log_fd = open(log_path, "a")
     _agent_env = {**os.environ, "PYTHONUNBUFFERED": "1"}
@@ -870,19 +870,21 @@ async def agent_start(new_game: bool = False):
     # Read provider/model from config.yaml (single source of truth)
     try:
         import yaml as _yaml
-        _cfg_path = Path.home() / "projects" / "pokemon-standalone-agent" / "config.yaml"
+        _cfg_path = Path.home() / "projects" / "pokemon-agent" / "config.yaml"
         with open(_cfg_path) as _f:
             _cfg = _yaml.safe_load(_f) or {}
         _default_prov = _cfg.get("default_provider", "local")
         _prov_cfg = _cfg.get("providers", {}).get(_default_prov, {})
         _agent_env["POKEMON_AGENT_PROVIDER"] = _default_prov
-        _agent_env["POKEMON_AGENT_MODEL"] = _prov_cfg.get("model", "google/gemma-4-e4b")
+        _agent_env["POKEMON_AGENT_MODEL"] = _prov_cfg.get("model", "openrouter/owl-alpha")
     except Exception:
-        _agent_env["POKEMON_AGENT_PROVIDER"] = "local"
-        _agent_env["POKEMON_AGENT_MODEL"] = "google/gemma-4-e4b"
+        _agent_env["POKEMON_AGENT_PROVIDER"] = "openrouter"
+        _agent_env["POKEMON_AGENT_MODEL"] = "openrouter/owl-alpha"
+    # Use the venv python from the consolidated repo
+    venv_python = agent_dir / ".venv" / "bin" / "python3"
     _agent_proc = subprocess.Popen(
-        [sys.executable, "-m", "src.main_loop"],
-        cwd=str(standalone_dir),
+        [str(venv_python), "-m", "pokemon_agent.agent.main_loop"],
+        cwd=str(agent_dir),
         stdout=log_fd,
         stderr=subprocess.STDOUT,
         start_new_session=True,
@@ -966,7 +968,7 @@ async def agent_get_models():
     }
     """
     import yaml as _yaml
-    config_path = Path.home() / "projects" / "pokemon-standalone-agent" / "config.yaml"
+    config_path = Path.home() / "projects" / "pokemon-agent" / "config.yaml"
     if not config_path.exists():
         raise HTTPException(status_code=404, detail="config.yaml not found")
     with open(config_path) as f:
