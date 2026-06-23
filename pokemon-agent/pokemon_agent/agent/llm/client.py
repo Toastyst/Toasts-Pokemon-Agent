@@ -378,20 +378,25 @@ class LLMClient:
         )
         return response
 
-    def _get_vision_endpoint(self, model_name: str) -> Tuple[str, str]:
+    def _get_vision_endpoint(self, model_name: str) -> Tuple[str, str, str]:
         """
-        Resolve the base_url and api_key for a vision model.
+        Resolve the base_url, api_key, and actual model name for a vision model.
 
         If model_name has a "provider:" prefix (e.g. "local:smolvlm-500m-instruct"),
-        look up that provider in self._providers. Otherwise use the default
-        (OpenRouter) base_url and api_key.
+        look up that provider in self._providers and strip the prefix.
+        Otherwise use the default (OpenRouter) base_url/api_key and keep the
+        full model name as-is.
+
+        Returns: (base_url, api_key, actual_model_name)
         """
         if ":" in model_name and not model_name.startswith("http"):
             prefix = model_name.split(":")[0]
             if prefix in self._providers:
                 prov = self._providers[prefix]
-                return prov["base_url"].rstrip("/"), prov.get("api_key", "not-needed")
-        return self.base_url, self.api_key
+                # Strip provider prefix for the API call
+                actual_model = model_name.split(":", 1)[1]
+                return prov["base_url"].rstrip("/"), prov.get("api_key", "not-needed"), actual_model
+        return self.base_url, self.api_key, model_name
 
     def chat_vision(
         self,
@@ -415,10 +420,8 @@ class LLMClient:
         last_error = ""
 
         for i, model_name in enumerate(models_to_try):
-            # Resolve the correct endpoint for this model
-            endpoint_base, endpoint_key = self._get_vision_endpoint(model_name)
-            # Strip provider prefix from model name for the API call
-            actual_model = model_name.split(":", 1)[1] if ":" in model_name and not model_name.startswith("http") else model_name
+            # Resolve the correct endpoint and actual model name for this model
+            endpoint_base, endpoint_key, actual_model = self._get_vision_endpoint(model_name)
             payload = {
                 "model": actual_model,
                 "messages": [{"role": "user", "content": content}],
@@ -440,8 +443,16 @@ class LLMClient:
                         choices = data.get("choices", [])
                         if choices:
                             msg = choices[0].get("message", {})
-                            result = (msg.get("content") or "").strip() or (msg.get("reasoning_content") or "").strip()
-                            return result
+                            # Some models (e.g. nemotron omni) put output in
+                            # "reasoning" instead of "content". Try all known
+                            # output fields in order of preference.
+                            raw = msg.get("content")
+                            if raw is None:
+                                raw = msg.get("reasoning_content") or msg.get("reasoning")
+                            result = (raw or "").strip()
+                            if result:
+                                return result
+                            last_error = "empty content/reasoning"
                         last_error = "empty choices"
                     else:
                         err_text = resp.text[:500]
