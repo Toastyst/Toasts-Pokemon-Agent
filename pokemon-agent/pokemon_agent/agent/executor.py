@@ -200,12 +200,91 @@ class Executor:
         """Return list of walkable directions from current position."""
         return get_walkable_directions(state)
 
+    def pick_intermediate_target(self, state: Dict[str, Any],
+                                direction_hint: str = "",
+                                max_range: int = 7) -> Optional[Tuple[int, int]]:
+        """Pick a walkable tile in the visible grid to use as an intermediate
+        target when no explicit target_position is set.
+
+        Strategy:
+        1. If direction_hint contains a cardinal direction, pick the farthest
+           walkable tile in that direction (up to max_range steps).
+        2. If no direction hint, pick the farthest walkable tile that leads
+           toward the map edge (exploration heuristic).
+
+        Returns (x, y) game coordinate or None if no walkable tiles found.
+        """
+        grid = get_collision_grid(state)
+        if grid is None:
+            return None
+
+        px, py = state.get("x", 0), state.get("y", 0)
+        rows, cols = len(grid), len(grid[0])
+
+        # Parse direction from hint
+        desired_dir = None
+        if direction_hint:
+            hint_lower = direction_hint.lower()
+            for d in ["north", "south", "east", "west"]:
+                if d in hint_lower:
+                    desired_dir = d
+                    break
+
+        # Direction vectors: (dx, dy) for each cardinal direction
+        dir_vectors = {
+            "north": (0, -1),
+            "south": (0, 1),
+            "west": (-1, 0),
+            "east": (1, 0),
+        }
+
+        if desired_dir and desired_dir in dir_vectors:
+            ddx, ddy = dir_vectors[desired_dir]
+            # Walk in the desired direction up to max_range, pick farthest walkable
+            best = None
+            for step in range(1, max_range + 1):
+                nx, ny = px + ddx * step, py + ddy * step
+                # Check if in grid bounds
+                gc, gr = coords_to_grid(nx, ny, px, py)
+                if not (0 <= gr < rows and 0 <= gc < cols):
+                    break  # Off-grid: this is the edge, use previous step
+                if not grid[gr][gc]:
+                    break  # Blocked: can't go further, use previous step
+                best = (nx, ny)
+            if best:
+                return best
+
+        # No direction hint or direction fully blocked: pick farthest walkable
+        # tile by Manhattan distance (prefer tiles near map edges)
+        best = None
+        best_score = -1
+        for gr in range(rows):
+            for gc in range(cols):
+                if not grid[gr][gc]:
+                    continue
+                gx, gy = grid_to_coords(gr, gc, px, py)
+                # Skip current position
+                if gx == px and gy == py:
+                    continue
+                # Score: prefer tiles near map edges (exploration heuristic)
+                dist = abs(gx - px) + abs(gy - py)
+                edge_bonus = 0
+                if gr == 0 or gr == rows - 1:
+                    edge_bonus += 3
+                if gc == 0 or gc == cols - 1:
+                    edge_bonus += 3
+                score = dist + edge_bonus
+                if score > best_score:
+                    best_score = score
+                    best = (gx, gy)
+        return best
+
     def compute_path(self, target_x: int, target_y: int, state: Dict[str, Any], max_steps: int = 15) -> List[str]:
         """
         Compute a path from current position to target coordinates.
         Returns list of walk actions (may be empty if no path found).
         Does NOT execute anything — just returns the path.
-        
+
         Uses BFS when target is visible in the collision grid,
         otherwise uses greedy directional walk toward target.
         """
@@ -218,9 +297,9 @@ class Executor:
 
         deltas = [
             ("walk_up",    0, -1),
-            ("walk_down",  0, 1),
-            ("walk_left",  -1, 0),
-            ("walk_right", 1, 0),
+            ("walk_down",  0,  1),
+            ("walk_left", -1,  0),
+            ("walk_right", 1,  0),
         ]
 
         # Check if target is in the collision grid

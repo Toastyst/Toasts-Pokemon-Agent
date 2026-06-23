@@ -622,6 +622,14 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
             print(f"  [GPS-debug] map={game_state.get('map_name')!r} avoid={avoid_maps} suggested={suggested_direction}")
 
         # --- P0b: Compute A* path and store for prompt injection ---
+        # If no target_position, pick an intermediate target in the direction
+        # of the objective so A* has a goal to path toward.
+        if target_position is None and game_state:
+            _intermediate = self.executor.pick_intermediate_target(
+                game_state, direction_hint=objective)
+            if _intermediate:
+                target_position = _intermediate
+                print(f"  [A*] Auto-target: {target_position} (from objective: {objective[:50]})")
         self.planned_path = self._compute_astar_path(
             game_state, target_position, max_steps=8,
             suggested_direction=suggested_direction)
