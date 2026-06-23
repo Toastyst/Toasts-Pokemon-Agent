@@ -81,7 +81,14 @@ def coords_to_grid(x: int, y: int, player_x: int, player_y: int) -> Tuple[int, i
 
 
 def is_warp_tile(state: Dict[str, Any], x: int, y: int) -> bool:
-    """Check if a game coordinate is a warp/stairs tile."""
+    """Check if a game coordinate is a warp/stairs tile using warp RAM entries
+    and per-tileset warp tile IDs."""
+    # Check warp RAM entries first (most reliable)
+    for w in state.get("raw", {}).get("warps", []):
+        if w.get("x") == x and w.get("y") == y:
+            return True
+
+    # Check by collision grid tile IDs using per-tileset warp sets
     grid = get_collision_grid(state)
     if grid is None:
         return False
@@ -94,9 +101,9 @@ def is_warp_tile(state: Dict[str, Any], x: int, y: int) -> bool:
         tile_ids = state.get("raw", {}).get("collision", {}).get("tile_ids", [])
         if 0 <= grid_row < len(tile_ids) and 0 <= grid_col < len(tile_ids[0]):
             tile_id = tile_ids[grid_row][grid_col]
-            # Warp tile IDs: 0x08=stairs down, 0x10=warp pad, 0x1B=door/entry warp
-            if tile_id in (0x08, 0x10, 0x18, 0x19, 0x1A, 0x1B, 0x20, 0x21):
-                return True
+            tileset = state.get("raw", {}).get("collision", {}).get("tileset", 0)
+            from pokemon_agent.server.collision import TILESET_WARP_TILES
+            return tile_id in TILESET_WARP_TILES.get(tileset, frozenset())
     return False
 
 
@@ -118,11 +125,14 @@ def is_walkable(state: Dict[str, Any], x: int, y: int) -> bool:
     else:
         return False  # out of grid bounds
 
-    # Check sprite collision — NPCs and items block movement
+    # Check sprite collision — only NPCs block movement.
+    # Items are walkable (you walk up to them and press A to interact).
     for sprite in state.get("sprites", []):
         sx, sy = sprite.get("x"), sprite.get("y")
         if sx == x and sy == y:
-            return False  # sprite blocks this tile
+            if sprite.get("type") == "npc":
+                return False  # NPCs block movement
+            # Items do NOT block — agent walks to them and interacts
 
     return True
 
@@ -209,10 +219,19 @@ def render_collision_grid(state: Dict[str, Any]) -> str:
         elif sp.get("type") == "npc":
             sprite_map[(sx, sy)] = "N"
 
-    # Collect warp positions
+    # Collect warp positions from warps array with door vs stairs classification
+    warp_positions = {}  # (gx, gy) -> "D" or "S"
     warp_set = set()
     for w in state.get("warps", []):
-        warp_set.add((w.get("x"), w.get("y")))
+        wx, wy = w.get("x"), w.get("y")
+        dest_map = w.get("dest_map", -1)
+        dest_name = w.get("dest_name", "")
+        # Door/exit: dest_map == 255 (doormat sentinel) OR leads to outdoor map
+        is_exit = (dest_map == 255 or
+                   any(kw in dest_name.lower() for kw in
+                       ["route", "town", "city", "island", "plateau"]))
+        warp_set.add((wx, wy))
+        warp_positions[(wx, wy)] = "D" if is_exit else "S"
 
     lines = []
     lines.append(f"  Viewport (9x10, player @ at ({px},{py}), Y down, X right):")
@@ -227,25 +246,14 @@ def render_collision_grid(state: Dict[str, Any]) -> str:
 
             if gx == px and gy == py:
                 # Player standing here — also show special tile type if present
-                if (gx, gy) in warp_set:
-                    is_doormat = False
-                    for w in state.get("warps", []):
-                        if w.get("x") == gx and w.get("y") == gy and w.get("dest_map") == 255:
-                            is_doormat = True
-                            break
-                    tiles.append("@D" if is_doormat else "@S")
+                if (gx, gy) in warp_positions:
+                    tiles.append("@" + warp_positions[(gx, gy)])
                 else:
                     tiles.append("@")
             elif (gx, gy) in sprite_map:
                 tiles.append(sprite_map[(gx, gy)])
-            elif (gx, gy) in warp_set:
-                # Distinguish doormat (dest_map=255) from interior stairs
-                is_doormat = False
-                for w in state.get("warps", []):
-                    if w.get("x") == gx and w.get("y") == gy and w.get("dest_map") == 255:
-                        is_doormat = True
-                        break
-                tiles.append("D" if is_doormat else "S")
+            elif (gx, gy) in warp_positions:
+                tiles.append(warp_positions[(gx, gy)])
             elif cell:
                 tiles.append(".")
             else:

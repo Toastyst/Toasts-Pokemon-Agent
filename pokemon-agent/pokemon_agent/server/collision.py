@@ -298,13 +298,20 @@ def build_special_tiles(
             elif tid in warp_set:
                 # Distinguish stairs from doors:
                 # 1. If it's in the tileset door_set, it's a door
-                # 2. If it matches a warp RAM entry with dest_map=255 (doormat/exit),
-                #    it's a door regardless of tileset
-                # 3. Otherwise it's stairs/warp
+                # 2. If it matches a warp RAM entry, check destination:
+                #    - dest_map == 255 (doormat sentinel) → door/exit
+                #    - dest is outdoor (city/route/town) → door/exit
+                #    - otherwise → stairs (between floors)
+                # 3. Otherwise default to stairs
                 is_door = tid in door_set
                 if not is_door and (abs_y, abs_x) in warp_positions:
                     w = warp_positions[(abs_y, abs_x)]
-                    if w.get("dest_map") == 255:
+                    dest_map = w.get("dest_map", -1)
+                    dest_name = w.get("dest_name", "")
+                    if dest_map == 255:
+                        is_door = True
+                    elif any(kw in dest_name.lower() for kw in
+                             ["route", "town", "city", "island", "plateau"]):
                         is_door = True
                 if is_door:
                     special[label] = {"type": "door", "source": "tile_id"}
