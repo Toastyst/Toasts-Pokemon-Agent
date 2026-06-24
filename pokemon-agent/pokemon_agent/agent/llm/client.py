@@ -1,14 +1,20 @@
 """
 LLM Client — Thin wrapper around OpenAI-compatible API.
 
-Supports any provider with an OpenAI-compatible /v1/chat/completions endpoint.
-Logs every call to /tmp/pokemon-llm-calls.jsonl for observability.
+Simple failover chain:
+  1. Try primary model with primary key
+  2. On 429 → rotate to next key (same model)
+  3. On 400/invalid → try next model in fallback chain
+  4. On daily limit → mark key exhausted, try next key
+  5. If all fail → return None, caller decides retry delay
+
+Vision uses the same chain but only with models that support images.
 """
 
 import json
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, List, Tuple
 
 import requests
 
@@ -51,30 +57,43 @@ def _log_llm_call(
 class LLMClient:
     def __init__(
         self,
-        base_url: str = "http://192.168.1.179:1234/v1",
-        api_key: str = "not-needed",
-        model: str = "default",
+        base_url: str = "https://openrouter.ai/api/v1",
+        api_key: str = "",
+        model: str = "google/gemma-4-31b-it:free",
         temperature: float = 0.7,
         max_tokens: int = 8192,
         timeout: int = 120,
-        vision_fallback_models: Optional[list[str]] = None,
+        # --- Simple failover chain ---
+        fallback_models: Optional[List[str]] = None,
+        api_keys: Optional[List[str]] = None,
+        # --- Vision ---
+        vision_model: Optional[str] = None,
+        vision_fallbacks: Optional[List[str]] = None,
+        # --- Provider registry for local models ---
         providers: Optional[Dict[str, Dict[str, str]]] = None,
     ):
         self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout = timeout
-        self.error_count = 0
-        self.last_error = ""
-        self.vision_fallback_models = vision_fallback_models or []
-        # Provider registry: provider_name → {base_url, api_key}
-        # Used by chat_vision to route local: prefixed models to the right server
+
+        # --- Keys: try in order, skip exhausted ones ---
+        self._api_keys = api_keys or ([api_key] if api_key else [""])
+        self._key_idx = 0  # which key to try first
+        self._exhausted_keys: set = set()  # indices of keys that hit daily limit
+
+        # --- Models: primary + fallbacks ---
+        self._model_chain = [model] + (fallback_models or [])
+
+        # --- Vision ---
         self._providers: Dict[str, Dict[str, str]] = providers or {}
-        # Resolve which model to use for vision at init time
-        self._vision_model = self._resolve_vision_model()
-        # Optional streaming token callback — when set, chat() streams tokens
+        self._vision_model = vision_model or model
+        self._vision_chain = [self._vision_model] + [
+            m for m in (vision_fallbacks or []) if m != self._vision_model
+        ]
+
+        # --- Streaming ---
         self._token_callback = None
         self._streaming = False
 
@@ -88,54 +107,38 @@ class LLMClient:
         self._token_callback = None
         self._streaming = False
 
-    def _resolve_vision_model(self) -> str:
-        """
-        Determine the best model for vision calls.
+    # ------------------------------------------------------------------
+    # Core: try model+key chain, return response or None
+    # ------------------------------------------------------------------
 
-        If the primary model is on OpenRouter, query the models API to check
-        input_modalities. If it doesn't support images, pick the first fallback
-        that does. This avoids wasting an API call on every dialog step.
+    def _get_current_key(self) -> str:
+        """Get the current non-exhausted key, or the last exhausted one if all are done."""
+        for offset in range(len(self._api_keys)):
+            idx = (self._key_idx + offset) % len(self._api_keys)
+            if idx not in self._exhausted_keys:
+                return self._api_keys[idx]
+        # All exhausted — fall back to primary key (will get 429 but at least returns error)
+        return self._api_keys[0]
 
-        For non-OpenRouter providers (e.g. local LM Studio), just use the
-        primary model and rely on runtime fallback if it fails.
-        """
-        models_to_check = [self.model] + self.vision_fallback_models
-        # Skip local: prefixed models during OpenRouter API lookup — they're
-        # resolved at runtime via _get_vision_endpoint instead.
-        def _is_local(m: str) -> bool:
-            return ":" in m and not m.startswith("http") and m.split(":")[0] in self._providers
+    def _mark_key_exhausted(self, key: str) -> None:
+        """Mark a key as daily-exhausted so we skip it."""
+        try:
+            idx = self._api_keys.index(key)
+            self._exhausted_keys.add(idx)
+            print(f"  [Key] Key #{idx+1} marked exhausted — skipping for rest of session")
+        except ValueError:
+            pass
 
-        or_models_to_check = [m for m in models_to_check if not _is_local(m)]
-        # Only query OpenRouter API if we're using OpenRouter
-        if "openrouter.ai" in self.base_url and self.api_key and self.api_key != "not-needed":
-            try:
-                resp = requests.get(
-                    "https://openrouter.ai/api/v1/models",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
-                    timeout=15,
-                )
-                if resp.status_code == 200:
-                    model_data = {m["id"]: m for m in resp.json().get("data", [])}
-                    for m in or_models_to_check:
-                        # Look up model, trying with and without :free suffix
-                        info = model_data.get(m) or model_data.get(m.replace(":free", ""))
-                        if info:
-                            arch = info.get("architecture", {})
-                            input_mods = [str(x).lower() for x in arch.get("input_modalities", [])]
-                            if "image" in input_mods:
-                                if m != self.model:
-                                    print(f"  [Vision] Primary model '{self.model}' doesn't support images. Using fallback: {m}")
-                                return m
-                    print(f"  [Vision] WARNING: No vision-capable model found among configured models")
-            except Exception as e:
-                print(f"  [Vision] Model capability check failed: {e}, will use runtime fallback")
-        # Check if any local provider models are available — trust config
-        for m in models_to_check:
-            if _is_local(m):
-                print(f"  [Vision] Using local model from config: {m}")
-                return m
-        # Default: use primary model (runtime fallback will handle failures)
-        return self.model
+    @staticmethod
+    def _should_rotate_model(status_code: int, error_text: str) -> bool:
+        """Check if we should try the next model."""
+        if status_code == 400:
+            return True  # Invalid model / bad request
+        if status_code == 429:
+            return True  # Rate limit — try next model
+        if status_code in (502, 503, 504):
+            return True  # Server error
+        return False
 
     def chat(
         self,
@@ -146,257 +149,255 @@ class LLMClient:
         agent_type: str = "nav",
     ) -> Optional[str]:
         """
-        Send a chat completion request. Returns the response text.
-        agent_type: label for the log ("nav", "guide", "critique", "battle").
-
-        If set_token_callback() was called with streaming=True, this uses
-        SSE streaming and calls the callback for each token chunk. The full
-        response is still returned so callers need no changes.
+        Send a chat completion request with model+key failover chain.
+        Returns response text, or None if all models/keys failed.
         """
+        temp = temperature if temperature is not None else self.temperature
+        toks = max_tokens if max_tokens is not None else self.max_tokens
+
+        # If streaming is enabled, use streaming path
         if self._token_callback and self._streaming:
             return self._chat_streaming(
                 system_prompt, user_message,
                 token_callback=self._token_callback,
-                temperature=temperature, max_tokens=max_tokens,
+                temperature=temp, max_tokens=toks,
                 agent_type=agent_type,
             )
 
-        # --- non-streaming path (original) ---
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            "temperature": temperature if temperature is not None else self.temperature,
-            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
-        }
+        # --- Non-streaming: try model chain ---
+        last_error = ""
+        t_start = time.time()
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-        }
+        for model_idx, model in enumerate(self._model_chain):
+            # --- Try key chain for this model ---
+            for key_offset in range(len(self._api_keys)):
+                key_idx = (self._key_idx + key_offset) % len(self._api_keys)
+                if key_idx in self._exhausted_keys:
+                    continue
+                key = self._api_keys[key_idx]
 
-        t0 = time.time()
-        response = None
-        status_code = 0
-        error = ""
-        token_usage = None
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    "temperature": temp,
+                    "max_tokens": toks,
+                    "stream": False,
+                }
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {key}",
+                }
 
-        try:
-            with requests.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=self.timeout,
-            ) as resp:
-                status_code = resp.status_code
+                t0 = time.time()
+                status_code = 0
+                error = ""
+                token_usage = None
+                content = ""
+                try:
+                    with requests.post(
+                        f"{self.base_url}/chat/completions",
+                        json=payload, headers=headers, timeout=self.timeout,
+                    ) as resp:
+                        status_code = resp.status_code
 
-                if resp.status_code == 200:
-                    data = resp.json()
-                    choices = data.get("choices", [])
-                    if not choices:
-                        error = "API returned empty choices list"
-                        self.error_count += 1
-                        self.last_error = error
-                        print(f"[LLM] Error: {error}")
-                        _log_llm_call(agent_type=agent_type, model=self.model,
-                                       system_prompt=system_prompt, user_message=user_message,
-                                       response=None, duration_ms=(time.time()-t0)*1000,
-                                       status_code=status_code, error=error)
-                        return None
-                    msg = choices[0].get("message", {})
-                    content = msg.get("content") or ""
-                    content = content.strip()
-                    # Some models (reasoning models) put output in reasoning_content
-                    if not content:
-                        content = (msg.get("reasoning_content") or "").strip()
-                    response = content
-                    usage = data.get("usage")
-                    if usage:
-                        token_usage = {
-                            "prompt_tokens": usage.get("prompt_tokens", 0),
-                            "completion_tokens": usage.get("completion_tokens", 0),
-                            "total_tokens": usage.get("total_tokens", 0),
-                        }
-                else:
-                    error = resp.text[:300]
-                    print(f"[LLM] HTTP {resp.status_code}: {resp.text[:200]}")
+                        if status_code == 200:
+                            data = resp.json()
+                            choices = data.get("choices", [])
+                            if choices:
+                                msg = choices[0].get("message", {})
+                                raw = msg.get("content") or ""
+                                if not raw:
+                                    raw = (msg.get("reasoning_content") or "").strip()
+                                content = raw.strip()
+                                if content:
+                                    self._key_idx = key_idx  # stick with this key
+                                    duration_ms = (time.time() - t0) * 1000
+                                    usage = data.get("usage")
+                                    if usage:
+                                        token_usage = {
+                                            "prompt_tokens": usage.get("prompt_tokens", 0),
+                                            "completion_tokens": usage.get("completion_tokens", 0),
+                                            "total_tokens": usage.get("total_tokens", 0),
+                                        }
+                                    tok_str = f" tokens={token_usage.get('total_tokens', '?')}" if token_usage else ""
+                                    print(f"  [LLM] {agent_type} | {model} | HTTP 200 | {duration_ms:.0f}ms{tok_str}")
+                                    _log_llm_call(agent_type=agent_type, model=model,
+                                                   system_prompt=system_prompt, user_message=user_message,
+                                                   response=content, duration_ms=duration_ms,
+                                                   status_code=200, token_usage=token_usage)
+                                    return content
+                            else:
+                                error = "API returned empty choices list"
+                        else:
+                            error = resp.text[:300]
+                except requests.Timeout:
+                    error = "request timeout"
+                except Exception as e:
+                    error = str(e)
 
-        except Exception as e:
-            error = str(e)
-            print(f"[LLM] Error: {e}")
+                if content:
+                    return content
 
-        duration_ms = (time.time() - t0) * 1000
-        tok_str = ""
-        if token_usage:
-            tok_str = f" tokens={token_usage.get('total_tokens', '?')}"
-        status_str = f"HTTP {status_code}" if status_code else "OK"
-        print(f"  [LLM] {agent_type} | {self.model} | {status_str} | {duration_ms:.0f}ms{tok_str}")
-        _log_llm_call(
-            agent_type=agent_type,
-            model=self.model,
-            system_prompt=system_prompt,
-            user_message=user_message,
-            response=response,
-            duration_ms=duration_ms,
-            status_code=status_code,
-            error=error,
-            token_usage=token_usage,
-        )
-        return response
+                # --- Failure: decide what to do ---
+                err_lower = error.lower()
+
+                if status_code == 429:
+                    if "daily" in err_lower or "per-day" in err_lower:
+                        self._mark_key_exhausted(key)
+                        continue
+                    # Per-min limit — try next key for fresh window
+                    print(f"  [LLM] {model} key #{key_idx+1} rate-limited (per-min), trying next key...")
+                    continue
+
+                if self._should_rotate_model(status_code, error):
+                    print(f"  [LLM] {model} failed (HTTP {status_code}): {error[:80]} — trying next model...")
+                    break  # break key loop, try next model
+
+                # Other error — try next key
+                print(f"  [LLM] {model} key #{key_idx+1} error: {error[:80]}")
+                last_error = error
+
+            # Check if all keys are exhausted for ALL keys
+            if len(self._exhausted_keys) >= len(self._api_keys):
+                # All keys exhausted — reset exhausted set for model rotation
+                # (different models may have different limits)
+                if model_idx < len(self._model_chain) - 1:
+                    print(f"  [LLM] All keys exhausted for {model}, trying next model...")
+                    self._exhausted_keys.clear()
+
+        # All models and keys failed
+        total_ms = (time.time() - t_start) * 1000
+        print(f"  [LLM] All models/keys failed ({total_ms:.0f}ms). Last error: {last_error[:100]}")
+        return None
 
     def _chat_streaming(
         self,
         system_prompt: str,
         user_message: str,
         token_callback,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        temperature: float,
+        max_tokens: int,
         agent_type: str = "nav",
     ) -> Optional[str]:
         """
-        Streaming variant of chat(). Sends the request with stream: true and
-        calls token_callback(chunk_text) for each content delta received.
-        Returns the full reconstructed response text (same as chat()).
-
-        token_callback receives individual content fragments (may be single
-        chars or multi-char chunks depending on the provider). It should be
-        fast / non-blocking — it is called from the read loop.
-
-        Falls back silently to non-streaming chat() on any streaming setup error.
+        Streaming variant. Tries model+key chain with streaming.
+        Falls back to non-streaming if all attempts fail.
         """
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            "temperature": temperature if temperature is not None else self.temperature,
-            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
-            "stream": True,
-        }
+        t_start = time.time()
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-            "Accept": "text/event-stream",
-        }
+        for model_idx, model in enumerate(self._model_chain):
+            for key_offset in range(len(self._api_keys)):
+                key_idx = (self._key_idx + key_offset) % len(self._api_keys)
+                if key_idx in self._exhausted_keys:
+                    continue
+                key = self._api_keys[key_idx]
 
-        t0 = time.time()
-        full_text = []
-        status_code = 0
-        error = ""
-        token_usage = None
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "stream": True,
+                }
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {key}",
+                    "Accept": "text/event-stream",
+                }
 
-        try:
-            with requests.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=self.timeout,
-                stream=True,
-            ) as resp:
-                status_code = resp.status_code
+                full_text = []
+                t0 = time.time()
+                try:
+                    with requests.post(
+                        f"{self.base_url}/chat/completions",
+                        json=payload, headers=headers,
+                        timeout=self.timeout, stream=True,
+                    ) as resp:
+                        status_code = resp.status_code
 
-                if resp.status_code != 200:
-                    error = resp.text[:300]
-                    print(f"  [LLM] stream HTTP {resp.status_code}: {resp.text[:200]}, falling back to non-streaming")
-                    return self.chat(system_prompt, user_message,
-                                     temperature=temperature, max_tokens=max_tokens,
-                                     agent_type=agent_type)
-
-                for raw_line in resp.iter_lines():
-                    if not raw_line:
-                        continue
-                    # SSE format: "data: {json}" or "data: [DONE]"
-                    line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
-                    if line.startswith("data: "):
-                        data_str = line[6:]
-                        if data_str.strip() == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(data_str)
-                        except json.JSONDecodeError:
+                        if status_code == 429:
+                            error = resp.text[:300]
+                            if "daily" in error.lower():
+                                self._mark_key_exhausted(key)
+                                continue
+                            print(f"  [LLM] {model} key #{key_idx+1} stream rate-limited, trying next...")
                             continue
 
-                        # Check for mid-stream errors
-                        if "error" in chunk:
-                            err_msg = chunk.get("error", {}).get("message", "unknown stream error")
-                            print(f"  [LLM] stream error: {err_msg}")
-                            error = err_msg
-                            break
+                        if status_code != 200:
+                            error = resp.text[:300]
+                            if self._should_rotate_model(status_code, error):
+                                print(f"  [LLM] {model} stream failed (HTTP {status_code}): {error[:80]} — next model")
+                                break
+                            print(f"  [LLM] {model} key #{key_idx+1} stream error: {error[:80]}")
+                            continue
 
-                        choices = chunk.get("choices", [])
-                        if choices:
-                            delta = choices[0].get("delta", {})
-                            content_piece = delta.get("content")
-                            if content_piece:
-                                full_text.append(content_piece)
-                                token_callback(content_piece)
+                        # Success — stream tokens
+                        for raw_line in resp.iter_lines():
+                            if not raw_line:
+                                continue
+                            line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                            if line.startswith("data: "):
+                                data_str = line[6:]
+                                if data_str.strip() == "[DONE]":
+                                    break
+                                try:
+                                    chunk = json.loads(data_str)
+                                except json.JSONDecodeError:
+                                    continue
+                                if "error" in chunk:
+                                    err_msg = chunk.get("error", {}).get("message", "stream error")
+                                    print(f"  [LLM] stream error: {err_msg}")
+                                    break
+                                choices = chunk.get("choices", [])
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    piece = delta.get("content")
+                                    if piece:
+                                        full_text.append(piece)
+                                        token_callback(piece)
 
-                        # Final chunk may include usage
-                        usage = chunk.get("usage")
-                        if usage:
-                            token_usage = {
-                                "prompt_tokens": usage.get("prompt_tokens", 0),
-                                "completion_tokens": usage.get("completion_tokens", 0),
-                                "total_tokens": usage.get("total_tokens", 0),
-                            }
+                        response = "".join(full_text).strip()
+                        duration_ms = (time.time() - t0) * 1000
+                        self._key_idx = key_idx
+                        tok_str = ""
+                        print(f"  [LLM] {agent_type} | {model} | HTTP 200 | {duration_ms:.0f}ms{tok_str} (streamed)")
+                        _log_llm_call(agent_type=agent_type, model=model,
+                                       system_prompt=system_prompt, user_message=user_message,
+                                       response=response, duration_ms=duration_ms,
+                                       status_code=200)
+                        return response
 
-        except Exception as e:
-            error = str(e)
-            print(f"  [LLM] stream exception: {e}, falling back")
-            # Clear token callback to prevent infinite recursion
-            saved_cb = self._token_callback
-            self._token_callback = None
-            self._streaming = False
-            result = self.chat(system_prompt, user_message,
-                             temperature=temperature, max_tokens=max_tokens,
-                             agent_type=agent_type)
-            self._token_callback = saved_cb
-            self._streaming = True
-            return result
+                except Exception as e:
+                    print(f"  [LLM] {model} key #{key_idx+1} stream exception: {e}")
 
-        response = "".join(full_text).strip()
-        duration_ms = (time.time() - t0) * 1000
-        tok_str = ""
-        if token_usage:
-            tok_str = f" tokens={token_usage.get('total_tokens', '?')}"
-        status_str = f"HTTP {status_code}" if status_code else "OK"
-        print(f"  [LLM] {agent_type} | {self.model} | {status_str} | {duration_ms:.0f}ms{tok_str} (streamed)")
-        _log_llm_call(
-            agent_type=agent_type,
-            model=self.model,
-            system_prompt=system_prompt,
-            user_message=user_message,
-            response=response,
-            duration_ms=duration_ms,
-            status_code=status_code,
-            error=error,
-            token_usage=token_usage,
-        )
-        return response
+        # All failed — fall back to non-streaming as last resort
+        print(f"  [LLM] Streaming failed on all models, falling back to non-streaming...")
+        self._token_callback = None
+        self._streaming = False
+        return self.chat(system_prompt, user_message,
+                         temperature=temperature, max_tokens=max_tokens,
+                         agent_type=agent_type)
 
-    def _get_vision_endpoint(self, model_name: str) -> Tuple[str, str, str]:
-        """
-        Resolve the base_url, api_key, and actual model name for a vision model.
+    # ------------------------------------------------------------------
+    # Vision
+    # ------------------------------------------------------------------
 
-        If model_name has a "provider:" prefix (e.g. "local:smolvlm-500m-instruct"),
-        look up that provider in self._providers and strip the prefix.
-        Otherwise use the default (OpenRouter) base_url/api_key and keep the
-        full model name as-is.
-
-        Returns: (base_url, api_key, actual_model_name)
-        """
+    def _resolve_vision_endpoint(self, model_name: str) -> Tuple[str, str, str]:
+        """Resolve base_url, api_key, and actual model name for a vision model."""
         if ":" in model_name and not model_name.startswith("http"):
             prefix = model_name.split(":")[0]
             if prefix in self._providers:
                 prov = self._providers[prefix]
-                # Strip provider prefix for the API call
                 actual_model = model_name.split(":", 1)[1]
                 return prov["base_url"].rstrip("/"), prov.get("api_key", "not-needed"), actual_model
-        return self.base_url, self.api_key, model_name
+        # Use primary endpoint with current non-exhausted key
+        return self.base_url, self._get_current_key(), model_name
 
     def chat_vision(
         self,
@@ -405,23 +406,18 @@ class LLMClient:
         max_tokens: int = 1024,
     ) -> Optional[str]:
         """
-        Send a screenshot to the model. Returns whatever the model says.
-        No system prompt, no special instructions — just the image.
-
-        Uses the vision model resolved at startup. If that model fails with
-        an image-unsupported error, tries remaining fallback models.
+        Send a screenshot to the vision model. Returns whatever the model says.
+        Tries the vision chain in order, falls back on image-unsupported errors.
+        Aborts immediately on 429 to avoid burning quota.
         """
         content = [{"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}}]
         if text_prompt:
             content.append({"type": "text", "text": text_prompt})
 
-        # Build ordered list: resolved vision model first, then remaining fallbacks
-        models_to_try = [self._vision_model] + [m for m in self.vision_fallback_models if m != self._vision_model]
         last_error = ""
 
-        for i, model_name in enumerate(models_to_try):
-            # Resolve the correct endpoint and actual model name for this model
-            endpoint_base, endpoint_key, actual_model = self._get_vision_endpoint(model_name)
+        for model_name in self._vision_chain:
+            endpoint_base, endpoint_key, actual_model = self._resolve_vision_endpoint(model_name)
             payload = {
                 "model": actual_model,
                 "messages": [{"role": "user", "content": content}],
@@ -434,18 +430,13 @@ class LLMClient:
             try:
                 with requests.post(
                     f"{endpoint_base}/chat/completions",
-                    json=payload,
-                    headers=headers,
-                    timeout=300,
+                    json=payload, headers=headers, timeout=300,
                 ) as resp:
                     if resp.status_code == 200:
                         data = resp.json()
                         choices = data.get("choices", [])
                         if choices:
                             msg = choices[0].get("message", {})
-                            # Some models (e.g. nemotron omni) put output in
-                            # "reasoning" instead of "content". Try all known
-                            # output fields in order of preference.
                             raw = msg.get("content")
                             if raw is None:
                                 raw = msg.get("reasoning_content") or msg.get("reasoning")
@@ -464,29 +455,19 @@ class LLMClient:
                                 "image", "vision", "multimodal", "unsupported",
                                 "not supported", "does not support",
                                 "invalid message content", "media type",
-                                "no endpoints found",
                             ]
                         )
                         if image_unsupported and resp.status_code in (400, 404, 415, 422):
-                            is_last = (i == len(models_to_try) - 1)
-                            if not is_last:
-                                print(f"  [Vision] {model_name} doesn't support images, trying next...")
-                                continue
-                        # Rate limit — try next model
+                            print(f"  [Vision] {model_name} doesn't support images, trying next...")
+                            continue
                         if resp.status_code == 429:
-                            is_last = (i == len(models_to_try) - 1)
-                            if not is_last:
-                                print(f"  [Vision] {model_name} rate-limited, trying next...")
-                                continue
-                        # Other HTTP error or last model — stop
+                            print(f"  [Vision] {model_name} rate-limited, aborting vision")
+                            return None
                         print(f"  [Vision] {model_name} error: HTTP {resp.status_code}")
-                        break
             except requests.Timeout:
                 last_error = "timeout"
-                if i < len(models_to_try) - 1:
-                    print(f"  [Vision] {model_name} timeout, trying next...")
-                    continue
-                break
+                print(f"  [Vision] {model_name} timeout, trying next...")
+                continue
             except Exception as e:
                 last_error = str(e)
                 print(f"  [Vision] {model_name} exception: {e}")
@@ -495,44 +476,37 @@ class LLMClient:
         print(f"  [Vision] All models failed. Last error: {last_error[:200]}")
         return None
 
+    # ------------------------------------------------------------------
+    # JSON mode
+    # ------------------------------------------------------------------
+
     def chat_json(
         self,
         system_prompt: str,
         user_message: str,
         max_retries: int = 2,
     ) -> Optional[Dict[str, Any]]:
-        """
-        Send a chat request and parse the response as JSON.
-        Retries if parsing fails.
-        """
+        """Send a chat request and parse the response as JSON."""
         for attempt in range(max_retries):
             response = self.chat(
-                system_prompt,
-                user_message,
-                temperature=0.1,
-                max_tokens=self.max_tokens,
+                system_prompt, user_message,
+                temperature=0.1, max_tokens=self.max_tokens,
                 agent_type="json",
             )
             if response is None:
                 continue
-
-            # Try to extract JSON from the response
             try:
                 return json.loads(response)
             except json.JSONDecodeError:
                 pass
-
-            # Try to find JSON in the response (may have markdown code blocks)
             text = response
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0]
             elif "```" in text:
                 text = text.split("```")[1].split("```")[0]
-
             try:
                 return json.loads(text.strip())
             except json.JSONDecodeError:
                 print(f"[LLM] JSON parse failed (attempt {attempt + 1}): {response[:100]}")
                 continue
-
         return None

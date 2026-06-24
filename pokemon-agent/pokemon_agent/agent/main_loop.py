@@ -68,20 +68,27 @@ class StandaloneAgent:
                 "api_key": pcfg.get("api_key", "not-needed"),
             }
 
-        # Secondary API key for rate-limit failover
-        fallback_key = os.environ.get("OPENROUTER_API_KEY2")
-        if fallback_key:
-            print(f"  [LLM] Fallback API key configured ({fallback_key[:10]}...)")
+        # Multiple API keys for rate-limit failover (different accounts)
+        api_keys = []
+        for key_name in ["OPENROUTER_API_KEY", "OPENROUTER_API_KEY2", "OPENROUTER_API_KEY3"]:
+            k = os.environ.get(key_name)
+            if k:
+                api_keys.append(k)
+        if not api_keys:
+            api_keys = [provider_cfg.get("api_key", "not-needed")]
+        print(f"  [LLM] {len(api_keys)} API key(s) configured")
 
         self.llm = LLMClient(
             base_url=provider_cfg["base_url"],
-            api_key=provider_cfg.get("api_key", "not-needed"),
+            api_key=api_keys[0],
             model=model_name,
             max_tokens=8192,
             timeout=120,
-            vision_fallback_models=config.get("vision_fallback_models", []),
+            fallback_models=config.get("fallback_models", []),
+            api_keys=api_keys,
+            vision_model=config.get("vision_model", model_name),
+            vision_fallbacks=config.get("vision_fallbacks", []),
             providers=vision_providers,
-            fallback_api_key=fallback_key,
         )
 
         # Three LLM agents
