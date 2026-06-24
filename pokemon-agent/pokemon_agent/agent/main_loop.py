@@ -661,11 +661,15 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
                 target_position = _warp_target
                 print(f"  [A*] Warp target: {target_position} (from objective: {objective[:50]})")
             else:
+                # Use GPS direction (not objective text) for auto-target —
+                # GPS knows the actual route (e.g. "go right to the gap"
+                # even when objective says "go north").
+                _gps_hint = suggested_direction or objective
                 _intermediate = self.executor.pick_intermediate_target(
-                    game_state, direction_hint=objective)
+                    game_state, direction_hint=_gps_hint)
                 if _intermediate:
                     target_position = _intermediate
-                    print(f"  [A*] Auto-target: {target_position} (from objective: {objective[:50]})")
+                    print(f"  [A*] Auto-target: {target_position} (from GPS: {_gps_hint[:30]})")
         self.planned_path = self._compute_astar_path(
             game_state, target_position, max_steps=8,
             suggested_direction=suggested_direction)
@@ -1031,6 +1035,18 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
                 outcome = "win" if state and state.get("party") and any(m.get("hp", 0) > 0 for m in state.get("party", [])) else "lose"
                 print(f"  [Battle] Ended after {battle_steps} turns — {outcome}")
                 push_event("think", f"Battle over ({battle_steps} turns) — {outcome}", base_url=self.base_url)
+
+                # After battle, check if we got blackouted (teleported to Pokemon Center)
+                if outcome == "lose" and state:
+                    current_map = state.get("map_name", "")
+                    start_map = self.objective_start_state.get("map_name", "") if self.objective_start_state else ""
+                    # If we're back in a town/house and were navigating to a different map,
+                    # reset the objective so the guide re-evaluates from the correct location
+                    if current_map and start_map and current_map != start_map:
+                        print(f"  [Battle] Blackout detected — teleported from {start_map} to {current_map}")
+                        push_event("key_moment", f"Blackout! Teleported to {current_map}", base_url=self.base_url)
+                        # Clear current objective so guide re-evaluates from new location
+                        self.current_objective = None
 
                 if hasattr(self, 'memory') and state:
                     # Build opponent pokemon list from battle state
