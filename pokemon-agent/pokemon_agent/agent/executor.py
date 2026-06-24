@@ -922,7 +922,15 @@ class Executor:
         if not exit_warps:
             # No exit warps found — the map may have a boundary exit (e.g.,
             # Pallet Town north to Route 1) that isn't a warp entry.
-            # Return None so the LLM uses the collision grid + objective to decide.
+            # If the objective suggests a cardinal direction, use it as GPS.
+            hint_lower = (direction_hint or "").lower()
+            for d in ["north", "south", "east", "west"]:
+                if d in hint_lower:
+                    dir_map = {"north": "press_up", "south": "press_down",
+                               "west": "press_left", "east": "press_right"}
+                    print(f"  [GPS-exec] No warps, using objective direction: {dir_map[d]} ({d})")
+                    return dir_map[d]
+            # No direction hint either — return None, LLM decides from grid
             print(f"  [GPS-exec] No exit warps after filtering (avoid={avoid})")
             return None
 

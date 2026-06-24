@@ -49,7 +49,7 @@ class StandaloneAgent:
 
         self.base_url = pa_config.get("base_url", "http://localhost:8765")
         self.timeout = pa_config.get("timeout", 30)
-        self.max_steps_per_objective = planning_config.get("max_steps_per_objective", 60)
+        self.max_steps_per_objective = planning_config.get("max_steps_per_objective", 300)
 
         # LLM client (shared by all three agents)
         # Allow env var POKEMON_AGENT_PROVIDER to override config default_provider
@@ -68,6 +68,11 @@ class StandaloneAgent:
                 "api_key": pcfg.get("api_key", "not-needed"),
             }
 
+        # Secondary API key for rate-limit failover
+        fallback_key = os.environ.get("OPENROUTER_API_KEY2")
+        if fallback_key:
+            print(f"  [LLM] Fallback API key configured ({fallback_key[:10]}...)")
+
         self.llm = LLMClient(
             base_url=provider_cfg["base_url"],
             api_key=provider_cfg.get("api_key", "not-needed"),
@@ -76,6 +81,7 @@ class StandaloneAgent:
             timeout=120,
             vision_fallback_models=config.get("vision_fallback_models", []),
             providers=vision_providers,
+            fallback_api_key=fallback_key,
         )
 
         # Three LLM agents
@@ -419,6 +425,29 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
             return candidates[0]
         return None
 
+    def _get_dest_map_for_action(self, game_state: Dict[str, Any], action: str) -> Optional[str]:
+        """Check what map the agent would end up on after executing an action.
+        Returns the destination map name if the action triggers a warp/door,
+        or None if the action just walks on the current map.
+        """
+        px = game_state.get("x", 0)
+        py = game_state.get("y", 0)
+        dir_deltas = {
+            "press_up": (0, -1), "walk_up": (0, -1),
+            "press_down": (0, 1), "walk_down": (0, 1),
+            "press_left": (-1, 0), "walk_left": (-1, 0),
+            "press_right": (1, 0), "walk_right": (1, 0),
+        }
+        delta = dir_deltas.get(action)
+        if not delta:
+            return None
+        nx, ny = px + delta[0], py + delta[1]
+        # Check if the destination tile is a warp tile
+        for w in game_state.get("warps", []):
+            if w.get("x") == nx and w.get("y") == ny:
+                return w.get("dest_name", "")
+        return None
+
     def _compute_astar_path(self, game_state: Dict[str, Any],
                             target_position: Optional[Tuple[int, int]],
                             max_steps: int = 10,
@@ -644,8 +673,17 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
             print(f"  [A*] Planned route ({len(self.planned_path)} steps): "
                   f"{', '.join(self.planned_path[:5])}"
                   f"{'...' if len(self.planned_path) > 5 else ''}")
-            # Override GPS with A* first step if path found
-            suggested_direction = self.planned_path[0]
+            # Validate A* first step: if it leads off the current map (into
+            # a building, wrong warp), discard it and trust GPS instead.
+            astar_first = self.planned_path[0]
+            dest_map = self._get_dest_map_for_action(game_state, astar_first)
+            current_map = game_state.get("map_name", "")
+            if dest_map and dest_map != current_map:
+                print(f"  [A*] REJECTED — first step leads to {dest_map}, not {current_map}. Trusting GPS: {suggested_direction}")
+                self.planned_path = []
+            else:
+                # Override GPS with A* first step if path found
+                suggested_direction = astar_first
 
         # --- P1: Detect oscillation and build nudge ---
         oscillation_nudge = self._detect_oscillation()
@@ -691,6 +729,18 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         if pos and map_name:
             self._update_visited_tiles(map_name, pos)
 
+        # --- Viewer steering input (Twitch chat redemptions) ---
+        from pokemon_agent.agent.llm.steering import get_steering_inputs
+        pending_steering = get_steering_inputs()
+        viewer_input = None
+        if pending_steering:
+            # Combine all pending inputs into one prompt section
+            parts = []
+            for s in pending_steering:
+                parts.append(f"- {s['username']}: {s['message']}")
+            viewer_input = "\n".join(parts)
+            print(f"  [Steering] {len(pending_steering)} viewer command(s): {viewer_input[:100]}")
+
         result = self.nav_agent.act(
             objective=objective,
             hints=hints,
@@ -706,6 +756,7 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
             recent_history=self.recent_nav_history[-4:],
             player_pos=pos,
             player_map=map_name,
+            viewer_input=viewer_input,
         )
 
         action = result.get("action", "wait")
@@ -797,7 +848,7 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         with open(self.trajectory_path, "a") as f:
             f.write(json.dumps(entry) + "\n")
 
-    def run(self, max_steps: int = 100):
+    def run(self, max_steps: int = 1000):
         """
         Main observe → guide → navigate → execute → critique loop.
 
