@@ -249,11 +249,16 @@ class Executor:
         """Pick a walkable tile in the visible grid to use as an intermediate
         target when no explicit target_position is set.
 
-        Strategy:
-        1. If direction_hint contains a cardinal direction, pick the farthest
-           walkable tile in that direction (up to max_range steps).
-        2. If no direction hint, pick the farthest walkable tile that leads
-           toward the map edge (exploration heuristic).
+        Strategy: Pick the walkable tile closest to the map edge in the
+        direction of travel. E.g. for "go north" pick the northernmost
+        walkable tile visible. This creates steady progress toward the exit
+        without oscillation — each step the target shifts forward as the
+        viewport shifts.
+
+        If direction_hint contains a cardinal direction, restrict to tiles
+        in that half-plane and pick the one closest to the leading edge.
+
+        If no direction hint, pick the walkable tile closest to any edge.
 
         Returns (x, y) game coordinate or None if no walkable tiles found.
         """
@@ -265,58 +270,53 @@ class Executor:
         rows, cols = len(grid), len(grid[0])
 
         # Parse direction from hint
-        desired_dir = None
+        hint_dir = None
         if direction_hint:
             hint_lower = direction_hint.lower()
             for d in ["north", "south", "east", "west"]:
                 if d in hint_lower:
-                    desired_dir = d
+                    hint_dir = d
                     break
 
-        # Direction vectors: (dx, dy) for each cardinal direction
-        dir_vectors = {
-            "north": (0, -1),
-            "south": (0, 1),
-            "west": (-1, 0),
-            "east": (1, 0),
-        }
-
-        if desired_dir and desired_dir in dir_vectors:
-            ddx, ddy = dir_vectors[desired_dir]
-            # Walk in the desired direction up to max_range, pick farthest walkable
-            best = None
-            for step in range(1, max_range + 1):
-                nx, ny = px + ddx * step, py + ddy * step
-                # Check if in grid bounds
-                gc, gr = coords_to_grid(nx, ny, px, py)
-                if not (0 <= gr < rows and 0 <= gc < cols):
-                    break  # Off-grid: this is the edge, use previous step
-                if not grid[gr][gc]:
-                    break  # Blocked: can't go further, use previous step
-                best = (nx, ny)
-            if best:
-                return best
-
-        # No direction hint or direction fully blocked: pick farthest walkable
-        # tile by Manhattan distance (prefer tiles near map edges)
         best = None
         best_score = -1
         for gr in range(rows):
             for gc in range(cols):
                 if not grid[gr][gc]:
-                    continue
+                    continue  # blocked
                 gx, gy = grid_to_coords(gr, gc, px, py)
                 # Skip current position
                 if gx == px and gy == py:
                     continue
-                # Score: prefer tiles near map edges (exploration heuristic)
                 dist = abs(gx - px) + abs(gy - py)
-                edge_bonus = 0
-                if gr == 0 or gr == rows - 1:
-                    edge_bonus += 3
-                if gc == 0 or gc == cols - 1:
-                    edge_bonus += 3
-                score = dist + edge_bonus
+                if dist > max_range:
+                    continue
+
+                if hint_dir == "north":
+                    # Prefer smallest gy (furthest north / top of screen)
+                    # Score: higher = better.  Row 0 is best.
+                    score = rows - gr
+                    if gr == 0:
+                        score += 5  # bonus for being at the edge
+                elif hint_dir == "south":
+                    score = gr
+                    if gr == rows - 1:
+                        score += 5
+                elif hint_dir == "west":
+                    score = cols - gc
+                    if gc == 0:
+                        score += 5
+                elif hint_dir == "east":
+                    score = gc
+                    if gc == cols - 1:
+                        score += 5
+                else:
+                    # No direction: prefer any edge
+                    score = max(
+                        gr, rows - 1 - gr,
+                        gc, cols - 1 - gc
+                    )
+
                 if score > best_score:
                     best_score = score
                     best = (gx, gy)
