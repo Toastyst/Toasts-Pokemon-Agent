@@ -81,10 +81,17 @@ class Executor:
             return False
 
     DIRECTION_MAP = {
-        "walk_up": "press_up",
-        "walk_down": "press_down",
-        "walk_left": "press_left",
-        "walk_right": "press_right",
+        # Map both walk_* and press_* (directions) to server walk_* — walk
+        # uses 60-frame tick (fast).  press_* for directions is treated as
+        # movement (not dialog) so we don't want the 240-frame dialog wait.
+        "walk_up": "walk_up",
+        "walk_down": "walk_down",
+        "walk_left": "walk_left",
+        "walk_right": "walk_right",
+        "press_up": "walk_up",
+        "press_down": "walk_down",
+        "press_left": "walk_left",
+        "press_right": "walk_right",
     }
 
     def step(self, action: str) -> Optional[Dict[str, Any]]:
