@@ -81,34 +81,35 @@ class StandaloneAgent:
 
         Returns: list of removed IDs (for logging).
         """
-        original = list(self.completed_ids)
-        stale = []
-
-        # Prerequisite chain: if a later step is still NOT done but earlier
-        # steps behind it ARE done and contradict reality, remove them.
-        # Key signals:
-        # - VIRIDIAN_CENTER done but party health < 100% → stale
-        # - VIRIDIAN_MART done but has_oaks_parcel is False → stale
-        # - DELIVER_PARCEL done but has_pokedex is False → stale
-        # - BOULDER_BADGE done but badge_count == 0 → stale
-
+        removed = []
         party = game_state.get("party", [])
         flags = game_state.get("flags", {})
         badge_count = game_state.get("badge_count", 0)
         map_name = game_state.get("map_name", "")
 
+        # HARD RESET DETECTION: If party is empty and the agent is in an
+        # early-game location (Pallet Town, Route 1, Oak's Lab), the game was
+        # reset or a fresh save was loaded. Clear ALL completed_ids — nothing
+        # from a previous run is valid anymore.
+        early_maps = ["Red's House", "Pallet Town", "Route 1", "Oak's Lab", "Route 0"]
+        is_early_game = len(party) == 0 and any(m in map_name for m in early_maps)
+        if is_early_game and self.completed_ids:
+            print(f"  [Progress] HARD RESET DETECTED: party empty in {map_name}")
+            print(f"  [Progress] Clearing all {len(self.completed_ids)} completed objectives")
+            removed = list(self.completed_ids)
+            self.completed_ids.clear()
+            self._save_progress()
+            return removed
+
+        # Per-objective stale detection:
         # Check VIRIDIAN_CENTER: if party has any member not at full HP, it's not healed
+        # (Unless agent is still inside the Pokecenter — might have just warped in)
+        stale = []
         if "VIRIDIAN_CENTER" in self.completed_ids:
-            all_full = True
             if party:
-                for p in party:
-                    if p.get("hp", 0) < p.get("max_hp", 1):
-                        all_full = False
-                        break
+                all_full = all(p.get("hp", 0) >= p.get("max_hp", 1) for p in party)
             else:
                 all_full = False
-            # Also: if agent is still inside the Pokecenter, it hasn't successfully
-            # completed the visit (it might have just warped in this tick)
             if not all_full and "Pokecenter" not in map_name:
                 stale.append("VIRIDIAN_CENTER")
 
@@ -128,28 +129,19 @@ class StandaloneAgent:
                 stale.append("BOULDER_BADGE")
 
         # Remove stale entries
-        removed = []
         for sid in stale:
             if sid in self.completed_ids:
                 self.completed_ids.remove(sid)
                 removed.append(sid)
                 print(f"  [Progress] Removed stale completion: {sid} (contradicted by current state)")
 
-        # Also forward-sync: if objective X is clearly done based on state but
-        # not in completed_ids, auto-add it.
+        # Forward-sync: auto-mark objectives clearly done based on state
         # - Party fully healed and agent is in/near Viridian Pokecenter → VIRIDIAN_CENTER done
-        if "VIRIDIAN_CENTER" not in self.completed_ids:
-            all_full = True
-            if party:
-                for p in party:
-                    if p.get("hp", 0) < p.get("max_hp", 1):
-                        all_full = False
-                        break
-            else:
-                all_full = False
-            if all_full and ("Pokecenter" in map_name or "Viridian" in map_name):
-                self.completed_ids.append("VIRIDIAN_CENTER")
-                print(f"  [Progress] Auto-marked VIRIDIAN_CENTER (party healed, in Viridian)")
+        if "VIRIDIAN_CENTER" not in self.completed_ids and party:
+            if all(p.get("hp", 0) >= p.get("max_hp", 1) for p in party):
+                if "Pokecenter" in map_name or "Viridian" in map_name:
+                    self.completed_ids.append("VIRIDIAN_CENTER")
+                    print(f"  [Progress] Auto-marked VIRIDIAN_CENTER (party healed, in Viridian)")
 
         # - has_oaks_parcel is True but VIRIDIAN_MART not marked
         if "VIRIDIAN_MART" not in self.completed_ids:
