@@ -163,9 +163,6 @@ def get_walkable_directions(state: Dict[str, Any]) -> List[str]:
         nx, ny = x + dx, y + dy
         if not is_walkable(state, nx, ny):
             continue
-        # Skip warp tiles — walking onto them triggers unwanted transitions
-        if is_warp_tile(state, nx, ny):
-            continue
         walkable.append(direction)
 
     return walkable

@@ -232,6 +232,7 @@ The collision grid shows your immediate surroundings. @ is you, . is walkable, #
 Use the grid to plan your route. The A* path (shown as "Suggested Route") is computed to avoid walls and obstacles — FOLLOW IT even if the direct line to the target looks clear. Walls and trees may block your path even when the target is visible.
 If your last action was blocked (didn't move), try a DIFFERENT direction that is walkable on the grid.
 
+STAIRS AND WARP TILES: S tiles (stairs/warp) and D tiles (doormat/exit) are WALKABLE. You can step on them normally. Stepping on S triggers a floor transition (e.g., stairs between floors). Stepping on D triggers a map exit (e.g., leaving a building). Do NOT avoid these tiles — use them to reach your objective.
 DOORMAT EXITS: If you are standing on a D (doormat) tile, press_down to exit. The server overrides collision for doormat exits — it's OK if the tile below shows #.
 
 CONNECTED MAPS: Some maps are connected without warp tiles (e.g., Pallet Town ↔ Route 1). To transition between connected maps, walk to the edge of the current map in the direction of the destination. There is NO "exit tile" — the map name changes automatically when you cross the boundary. If the objective says "go to Route 1" and you're in Pallet Town, just walk north until the map name changes.
