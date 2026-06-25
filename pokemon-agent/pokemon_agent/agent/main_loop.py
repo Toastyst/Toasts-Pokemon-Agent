@@ -539,6 +539,24 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         if step_id:
             for step in self.guide_steps:
                 if step["id"] == step_id and step["id"] not in self.completed_ids:
+                    # SAFETY NET: If party is empty, the ONLY valid objectives
+                    # are early-game starter steps (CHOOSE_STARTER, EXIT_REDS_*,
+                    # WALK_TO_OAK_TRIGGER). If the LLM picks something else
+                    # (e.g. VIRIDIAN_CENTER), override it.
+                    party = game_state.get("party", [])
+                    early_game_ids = {"CHOOSE_STARTER", "EXIT_REDS_HOUSE_2F",
+                                      "EXIT_REDS_HOUSE_1F", "WALK_TO_OAK_TRIGGER"}
+                    if len(party) == 0 and step_id not in early_game_ids:
+                        print(f"  [Guide] LLM picked {step_id} but party is empty — overriding to CHOOSE_STARTER")
+                        step_id = "CHOOSE_STARTER"
+                        for s in self.guide_steps:
+                            if s["id"] == "CHOOSE_STARTER" and s["id"] not in self.completed_ids:
+                                print(f"  [Guide] Override: CHOOSE_STARTER (party empty)")
+                                push_event("think", f"New objective: {s['description']}", base_url=self.base_url)
+                                self._auto_mark_prerequisites("CHOOSE_STARTER")
+                                return s
+                        # If CHOOSE_STARTER is already completed (shouldn't happen), fall through
+
                     print(f"  [Guide] LLM selected: {step_id}")
                     if reasoning:
                         print(f"  [Guide] Reasoning: {reasoning[:200]}")

@@ -81,12 +81,24 @@ GUIDE_SYSTEM = f"""You are the Guide Agent — the AUTHORITY on which objective 
 
 ROLE: Given the current game state, ALL available walkthrough steps (not yet completed), the completed IDs, and recent trajectory, pick the ONE step the agent should work on now. Your decision is final — the system trusts your reasoning.
 
+CRITICAL RULE — STRICT EARLY-GAME SEQUENCE:
+The early game is STRICTLY LINEAR. You CANNOT skip ahead. The order is:
+1. EXIT_REDS_HOUSE_2F → EXIT_REDS_HOUSE_1F → WALK_TO_OAK_TRIGGER → CHOOSE_STARTER
+2. RIVAL_BATTLE_1 (requires party non-empty)
+3. EXIT_OAKS_LAB → ROUTE_1_NORTH → VIRIDIAN_CENTER → VIRIDIAN_MART → DELIVER_PARCEL
+4. VIRIDIAN_FOREST → BOULDER_BADGE
+
+EARLY GAME OVERRIDE (highest priority):
+- If party is EMPTY and agent is in/near Oak's Lab or Pallet Town → MUST pick CHOOSE_STARTER
+- If party is EMPTY and agent is in Red's House → pick EXIT_REDS_HOUSE_2F or EXIT_REDS_HOUSE_1F
+- NEVER pick VIRIDIAN_CENTER, VIRIDIAN_MART, DELIVER_PARCEL, or any mid-game objective when party is empty
+
 THINKING APPROACH:
 1. Read the game state carefully (map, position, party, flags, badges, health).
 2. Look at completed_ids to see what's already done.
 3. Consider where the agent physically is — can it reach the objective from here?
-4. Consider SAVE/LOAD scenarios: the agent might have been reloaded mid-game. The agent may have partial progress (e.g. already healed at PC but the server wasn't tracking completed_ids). Use game state as ground truth, completed_ids as imperfect hints.
-5. Pick the most logical next step given CURRENT reality, not just walkthrough order.
+4. Consider SAVE/LOAD scenarios: the agent might have been reloaded mid-game. Use game state as ground truth, completed_ids as imperfect hints.
+5. Pick the most logical next step given CURRENT reality, respecting the strict sequence above.
 
 PREREQUISITE CHAINS (important):
 - VIRIDIAN_MART requires having healed at VIRIDIAN_CENTER first
@@ -95,6 +107,7 @@ PREREQUISITE CHAINS (important):
 If you pick a step, earlier steps in its chain are assumed done.
 
 WHEN IN DOUBT:
+- If party is empty → CHOOSE_STARTER (no exceptions)
 - If party health is low and the agent is in Viridian City → VIRIDIAN_CENTER first
 - If party is healed and in Viridian City → VIRIDIAN_MART (the parcel)
 - If the agent has Oak's Parcel → DELIVER_PARCEL back in Pallet Town
@@ -107,12 +120,12 @@ KNOWLEDGE BASE:
 
 OUTPUT FORMAT RULES (STRICT):
 - Write 1-4 sentences of reasoning. Explain WHY this step is the right one given current reality.
-- The VERY LAST LINE of your entire response must contain ONLY the exact step_id (e.g. VIRIDIAN_MART).
+- The VERY LAST LINE of your entire response must contain ONLY the exact step_id (e.g. CHOOSE_STARTER).
 - No JSON, no markdown, no quotes, no trailing text or periods after the step_id.
 
 Example correct output:
-Agent is in Viridian City at (23,26) with a fully healed party. Completed IDs show VIRIDIAN_CENTER was done. The next logical step is to get Oak's Parcel from the Poké Mart nearby.
-VIRIDIAN_MART
+Agent is in Oak's Lab with an empty party. The game was just reset. The only valid first objective is to pick a starter from the Poke Balls on the table.
+CHOOSE_STARTER
 """
 
 def build_guide_prompt(
