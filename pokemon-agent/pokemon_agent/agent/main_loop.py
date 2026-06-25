@@ -450,6 +450,12 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         if self.prev_map == current_map:
             return None
 
+        # On the very first step (prev_map is None), we have no history —
+        # we can't have "re-entered" anything. The agent was placed here by
+        # the game state. Skip re-entry detection entirely.
+        if self.prev_map is None:
+            return None
+
         # Known building maps (interior maps that you exit through doormats)
         building_indicators = ["1F", "2F", "3F", "4F", "5F", "B1F", "B2F",
                                "House", "Lab", "Mart", "Center", "Pokecenter",
@@ -467,12 +473,16 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
                 if step_conditions.get("map_name") == current_map:
                     return None  # We're supposed to be here
 
-        # Check if we have a completed objective that was ON this map
-        # If so, we somehow walked back in — generate exit objective
+        # Check if we have a completed objective whose COMPLETION map matches
+        # current_map — meaning the agent finished this objective (entered the
+        # building) and is now back inside it somehow.
         for step in self.guide_steps:
             if step["id"] in self.completed_ids:
-                step_conditions = step.get("start_conditions", {})
-                if step_conditions.get("map_name") == current_map:
+                # Check completion_conditions map, not start_conditions — the
+                # completion map is where the agent ENDS up after finishing
+                completion_conds = step.get("completion_conditions", {})
+                completion_map = completion_conds.get("map_name", "")
+                if completion_map and completion_map == current_map:
                     reentry_id = f"REEXIT_{step['id']}"
                     print(f"  [Guide] RE-ENTRY DETECTED: {current_map} (completed objective: {step['id']})")
                     return {
