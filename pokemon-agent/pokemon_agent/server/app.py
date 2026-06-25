@@ -877,6 +877,15 @@ async def agent_start(new_game: bool = False):
     log_fd = open(log_path, "a")
     _agent_env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     _agent_env["POKEMON_AGENT_DELAY"] = os.environ.get("POKEMON_AGENT_DELAY", "1.5")
+    # Load additional API keys from .env for rate-limit rotation
+    _env_file = Path.home() / "projects" / "pokemon-agent" / ".env"
+    if _env_file.exists():
+        for _line in _env_file.read_text().splitlines():
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+                _agent_env.setdefault(_k.strip(), _v.strip())
     # Read provider/model from config.yaml (single source of truth)
     try:
         import yaml as _yaml

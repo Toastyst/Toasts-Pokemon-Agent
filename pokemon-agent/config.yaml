@@ -4,7 +4,7 @@ providers:
     type: openai_compatible
     base_url: http://192.168.1.25:1234/v1
     api_key: not-needed
-    model: google/gemma-4-e2b
+    model: google/gemma-4-e4b
     context_length: 8192
     models:
     - google/gemma-4-e2b
@@ -13,8 +13,8 @@ providers:
     type: openai_compatible
     base_url: http://192.168.1.25:1234/v1
     api_key: not-needed
-    model: smolvlm-500m-instruct
-    context_length: 8192
+    model: gemma-4-e4b
+    context_length: 2048
   openrouter:
     type: openai_compatible
     base_url: https://openrouter.ai/api/v1
@@ -22,19 +22,18 @@ providers:
     model: openrouter/owl-alpha
     context_length: 8192
     models:
+    - openai/gpt-oss-120b:free
     - openrouter/owl-alpha
     - nex-agi/nex-n2-pro:free
     - google/gemma-4-31b-it:free
-    - nvidia/nemotron-3-nano-omni:free
-    - nvidia/nemotron-3-ultra-550b-a55b:free
+    - nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
     - nvidia/nemotron-3-super-120b-a12b:free
+    - nvidia/nemotron-3-ultra-550b-a55b:free
     - poolside/laguna-m.1:free
-    - openai/gpt-oss-120b:free
+    - openai/gpt-oss-20b:free
 pokemon_agent:
   base_url: http://localhost:8765
   timeout: 30
+vision_model: local_vision:gemma-4-e4b
 vision_fallback_models:
-- google/gemma-4-31b-it:free
-- google/gemma-4-26b-a4b-it:free
-- nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
-- nvidia/nemotron-nano-12b-v2-vl:free
+- local_vision:gemma-4-e4b

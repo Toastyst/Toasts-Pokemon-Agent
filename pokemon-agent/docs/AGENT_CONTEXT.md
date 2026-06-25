@@ -11,6 +11,7 @@
 - **S tiles:** Mark warp locations (stairs, doormats). They are regular walkable tiles. Warp fires when you walk onto the tile AND continue moving in the warp direction. For stairs, just walk onto them — the transition fires automatically. For doormats/exits, stand on the S tile then keep walking in the exit direction (usually south). No button press needed for any warp.
 - **Ledges:** One-way only (jump south/down only). Blocked north? Go left/right to bypass.
 - **Movement loop:** Send one action → observe new position. If coord unchanged: blocked. If blocked by NPC: interact (press A) then advance dialog (press B). If blocked by wall: try perpendicular direction. Never spam same direction >1 without checking.
+- **Counter NPCs:** Some NPCs (nurses in PokeCenters, clerks in Marts) stand behind a counter tile. The counter shows as `#` on the collision grid. You CANNOT walk onto it. To interact: stand on the walkable tile directly below/beside the counter, face toward the NPC, then press A. The game routes your interaction through the counter. Example: Nurse at (3,1) behind counter at (3,2) → stand at (3,3), press_up, press_a.
 - **Wall following:** If stuck, shift perpendicular. "If think stuck, probably building side."
 - **Tall grass / triggers:** Systematic search on map edges. Keep moving on success.
 - **Collision map:** `.` = walkable, `#` = blocked, `S` = stairs/warp, `@` = player. Use for navigation but **verify warps/doors via the warps array in state** — collision alone is not ground-truth for special tiles.

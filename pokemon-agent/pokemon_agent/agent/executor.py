@@ -250,6 +250,54 @@ class Executor:
             return (best_warp_match.get("x", 0), best_warp_match.get("y", 0))
         return None
 
+    def find_npc_interaction_target(self, state: Dict[str, Any],
+                                     npc_x: int, npc_y: int) -> Optional[Tuple[Tuple[int, int], str]]:
+        """Find the best standing position to interact with an NPC via counter.
+
+        In Pokemon Red, NPCs behind counters can be interacted with from a
+        walkable tile adjacent to the counter (on the opposite side from the NPC).
+        The game routes the A-press interaction through the counter to the NPC.
+
+        This function finds the nearest walkable tile adjacent to the NPC that is
+        on the same side as the player, returning (stand_x, stand_y, face_direction).
+
+        Returns: (stand_position, direction_to_face) or None if no valid tile found.
+        """
+        # Check 4 adjacent tiles to the NPC
+        candidates = [
+            ((npc_x, npc_y - 1), "press_up"),    # stand below NPC, face up — most common for counters
+            ((npc_x, npc_y + 1), "press_down"),  # stand above NPC, face down
+            ((npc_x - 1, npc_y), "press_right"), # stand right of NPC, face left
+            ((npc_x + 1, npc_y), "press_left"),  # stand left of NPC, face right
+        ]
+
+        # Filter to walkable tiles only
+        valid = []
+        for (sx, sy), face_dir in candidates:
+            if is_walkable(state, sx, sy):
+                valid.append(((sx, sy), face_dir))
+
+        if not valid:
+            return None
+
+        # Pick the closest one to the player
+        px, py = state.get("x", 0), state.get("y", 0)
+        valid.sort(key=lambda v: abs(v[0][0] - px) + abs(v[0][1] - py))
+        return valid[0]
+
+    def is_counter_npc(self, state: Dict[str, Any], npc_x: int, npc_y: int) -> bool:
+        """Check if an NPC appears to be behind a counter (not directly walkable from player).
+
+        Heuristic: If the NPC's tile is not walkable from the player's current
+        position because there's a non-walkable tile (likely counter) between them,
+        and there's at least one walkable adjacent tile to the NPC.
+        """
+        # Check if any tile adjacent to the NPC is walkable
+        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+            if is_walkable(state, npc_x + dx, npc_y + dy):
+                return True
+        return False
+
     def pick_intermediate_target(self, state: Dict[str, Any],
                                 direction_hint: str = "",
                                 max_range: int = 7) -> Optional[Tuple[int, int]]:
