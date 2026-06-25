@@ -1,7 +1,7 @@
 {
   "game": "Pokemon Red",
-  "format_version": "2.0",
-  "description": "State-driven walkthrough guide. Each objective has start_conditions (when the guide may pick it) and completion_conditions (when critique marks it done).",
+  "format_version": "1.0",
+  "description": "State-driven walkthrough guide",
   "steps": [
     {
       "id": "EXIT_REDS_HOUSE_2F",
@@ -17,10 +17,13 @@
       },
       "hints": [
         "Stairs are at the top-right of the room (approximately x=7, y=1)",
-        "Walk onto the S tile — it's a regular walkable tile. The warp fires automatically when you step on it.",
+        "Walk onto the S tile \u2014 it's a regular walkable tile. The warp fires automatically when you step on it.",
         "After stepping on the stairs, wait a frame or two for the transition to fire."
       ],
-      "target_position": [7, 1]
+      "target_position": [
+        7,
+        1
+      ]
     },
     {
       "id": "EXIT_REDS_HOUSE_1F",
@@ -36,10 +39,13 @@
       },
       "hints": [
         "Navigate to the S tiles (doormats) at the bottom of the room",
-        "Stand on the S tile, then keep walking south — the warp fires when you step off the tile in the exit direction.",
+        "Stand on the S tile, then keep walking south \u2014 the warp fires when you step off the tile in the exit direction.",
         "The S tile is regular floor. The exit triggers by walking south off it, not by stepping onto it."
       ],
-      "target_position": [3, 7]
+      "target_position": [
+        3,
+        7
+      ]
     },
     {
       "id": "WALK_TO_OAK_TRIGGER",
@@ -55,11 +61,14 @@
       },
       "hints": [
         "Navigate around the buildings to reach the north edge of the map.",
-        "The passage between buildings is at x=8 — go right from the entry point, then navigate north through the gap.",
+        "The passage between buildings is at x=8 \u2014 go right from the entry point, then navigate north through the gap.",
         "Grass tiles at y=1 (around x=10-11) trigger Oak's encounter.",
         "Avoid the S tile at (5,5) which leads back to Red's House."
       ],
-      "target_position": [10, 1]
+      "target_position": [
+        10,
+        1
+      ]
     },
     {
       "id": "CHOOSE_STARTER",
@@ -73,7 +82,7 @@
         "party": "nonempty"
       },
       "hints": [
-        "★ THIS IS IT — your first Pokemon! The most exciting moment in the game!",
+        "\u2605 THIS IS IT \u2014 your first Pokemon! The most exciting moment in the game!",
         "There are 3 Poke Balls on the table. The GPS will guide you to each one.",
         "At each ball: face toward it, press A, read the dialog to see what Pokemon is inside.",
         "If it's NOT the one you want, press B to say NO. The dialog will close.",
@@ -113,7 +122,7 @@
       },
       "hints": [
         "Walk south through the lab to the exit doormat at the bottom.",
-        "The exit is at the south wall — stand on the doormat tile, then continue walking south to trigger the warp.",
+        "The exit is at the south wall \u2014 stand on the doormat tile, then continue walking south to trigger the warp.",
         "You'll arrive in Pallet Town."
       ]
     },
@@ -130,7 +139,7 @@
       },
       "hints": [
         "Head north through Pallet Town to Route 1, then continue north to Viridian City.",
-        "Route 1 has wild Pidgey and Rattata — they are weak, you can battle or avoid."
+        "Route 1 has wild Pidgey and Rattata \u2014 they are weak, you can battle or avoid."
       ]
     },
     {
@@ -146,7 +155,7 @@
         "party": "health=100%"
       },
       "hints": [
-        "Step 1: Find the Pokemon Center in southwest Viridian City — look for a building with a warp tile near Route 1.",
+        "Step 1: Find the Pokemon Center in southwest Viridian City \u2014 look for a building with a warp tile near Route 1.",
         "Step 2: Walk onto the warp tile inside the door to enter the Pokemon Center.",
         "Step 3: Once INSIDE, walk north toward the counter. The nurse (NPC 0x29) is behind the counter.",
         "Step 4: COUNTER NPC: Stand on the walkable tile directly below the counter (# above you), face up, press A to interact.",
@@ -166,7 +175,8 @@
         "flags.has_oaks_parcel": true
       },
       "hints": [
-        "Step 1: Find the Viridian Mart in southeast Viridian City — look for a building with a warp/door tile.",
+        "Step 0: Leave the Pokemon Center",
+        "Step 1: Find the Viridian Mart in southeast Viridian City \u2014 look for a building with a warp/door tile.",
         "Step 2: Enter the building and walk toward the counter at the back.",
         "Step 3: COUNTER NPC: Stand on the walkable tile directly below the counter (# above you), face up, press A to interact.",
         "Step 4: The clerk gives you Oak's Parcel.",
@@ -182,6 +192,7 @@
         "party": "nonempty"
       },
       "completion_conditions": {
+        "map_name": "Viridian Pokemart",
         "flags.has_pokedex": true
       },
       "hints": [
@@ -206,7 +217,7 @@
       },
       "hints": [
         "Head north from Viridian City to Viridian Forest.",
-        "Forest has Bug-type Pokemon (Caterpie, Weedle) — good for grinding.",
+        "Forest has Bug-type Pokemon (Caterpie, Weedle) \u2014 good for grinding.",
         "Navigate through the forest using collision map.",
         "Exit north to Pewter City.",
         "Train your Pokemon to at least level 10-12 before the gym."
@@ -229,7 +240,7 @@
         "Brock uses Rock-type Pokemon (Geodude Lv12, Onix Lv14).",
         "Fire moves are NOT super effective against Rock in Gen 1 (bug).",
         "Water moves (if you chose Squirtle) are super effective.",
-        "If you chose Charmander, use Scratch — it still works.",
+        "If you chose Charmander, use Scratch \u2014 it still works.",
         "Growl to lower enemy Attack, then attack.",
         "After winning, receive Boulder Badge and TM34 (Bide)."
       ]
@@ -247,7 +258,7 @@
       },
       "hints": [
         "Head east from Pewter City to Route 3.",
-        "Route 3 has stronger wild Pokemon — be prepared.",
+        "Route 3 has stronger wild Pokemon \u2014 be prepared.",
         "Train your Pokemon before entering Mt. Moon."
       ]
     },
@@ -302,7 +313,7 @@
         "Vermilion City is south of Cerulean via Route 6.",
         "Lt. Surge uses Electric-type Pokemon (Voltorb, Pikachu, Raichu).",
         "Ground moves are super effective but rare in Gen 1.",
-        "Use physical attacks — Raichu is fast and hits hard."
+        "Use physical attacks \u2014 Raichu is fast and hits hard."
       ]
     },
     {
@@ -356,7 +367,7 @@
         "Saffron City is between Celadon, Vermilion, and Lavender.",
         "Sabrina uses Psychic-type Pokemon (Abra, Kadabra, Alakazam).",
         "Bug and Ghost moves are theoretically super effective.",
-        "In Gen 1, Ghost moves bug against Psychic — use strong physical attacks.",
+        "In Gen 1, Ghost moves bug against Psychic \u2014 use strong physical attacks.",
         "This is one of the hardest gyms."
       ]
     },
@@ -413,7 +424,7 @@
         "Champion is your rival (Blue/Gary) with a strong team.",
         "Recommended team level: 55-65.",
         "Stock up on Potions, Revives, and Full Restores before entering.",
-        "Psychic types are very strong in Gen 1 — consider having one."
+        "Psychic types are very strong in Gen 1 \u2014 consider having one."
       ]
     }
   ]

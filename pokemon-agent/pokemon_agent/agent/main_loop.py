@@ -70,6 +70,104 @@ class StandaloneAgent:
         except Exception as e:
             print(f"  [Progress] Could not save progress: {e}")
 
+    def _revalidate_progress(self, game_state: dict) -> list:
+        """
+        Remove stale completed_ids that no longer match current game state.
+
+        After a save/load or restart, persisted progress may be wrong — e.g.
+        VIRIDIAN_CENTER marked done but the agent's party is at 2/23 HP.
+        This method checks each completed objective against current reality
+        and removes contradictions so the agent can re-pick the right step.
+
+        Returns: list of removed IDs (for logging).
+        """
+        original = list(self.completed_ids)
+        stale = []
+
+        # Prerequisite chain: if a later step is still NOT done but earlier
+        # steps behind it ARE done and contradict reality, remove them.
+        # Key signals:
+        # - VIRIDIAN_CENTER done but party health < 100% → stale
+        # - VIRIDIAN_MART done but has_oaks_parcel is False → stale
+        # - DELIVER_PARCEL done but has_pokedex is False → stale
+        # - BOULDER_BADGE done but badge_count == 0 → stale
+
+        party = game_state.get("party", [])
+        flags = game_state.get("flags", {})
+        badge_count = game_state.get("badge_count", 0)
+        map_name = game_state.get("map_name", "")
+
+        # Check VIRIDIAN_CENTER: if party has any member not at full HP, it's not healed
+        if "VIRIDIAN_CENTER" in self.completed_ids:
+            all_full = True
+            if party:
+                for p in party:
+                    if p.get("hp", 0) < p.get("max_hp", 1):
+                        all_full = False
+                        break
+            else:
+                all_full = False
+            # Also: if agent is still inside the Pokecenter, it hasn't successfully
+            # completed the visit (it might have just warped in this tick)
+            if not all_full and "Pokecenter" not in map_name:
+                stale.append("VIRIDIAN_CENTER")
+
+        # Check VIRIDIAN_MART: if has_oaks_parcel is False, didn't get the parcel
+        if "VIRIDIAN_MART" in self.completed_ids:
+            if not flags.get("has_oaks_parcel", False):
+                stale.append("VIRIDIAN_MART")
+
+        # Check DELIVER_PARCEL: if has_pokedex is False, didn't deliver
+        if "DELIVER_PARCEL" in self.completed_ids:
+            if not flags.get("has_pokedex", False):
+                stale.append("DELIVER_PARCEL")
+
+        # Check BOULDER_BADGE: if badge_count > 0, done; otherwise stale
+        if "BOULDER_BADGE" in self.completed_ids:
+            if badge_count == 0:
+                stale.append("BOULDER_BADGE")
+
+        # Remove stale entries
+        removed = []
+        for sid in stale:
+            if sid in self.completed_ids:
+                self.completed_ids.remove(sid)
+                removed.append(sid)
+                print(f"  [Progress] Removed stale completion: {sid} (contradicted by current state)")
+
+        # Also forward-sync: if objective X is clearly done based on state but
+        # not in completed_ids, auto-add it.
+        # - Party fully healed and agent is in/near Viridian Pokecenter → VIRIDIAN_CENTER done
+        if "VIRIDIAN_CENTER" not in self.completed_ids:
+            all_full = True
+            if party:
+                for p in party:
+                    if p.get("hp", 0) < p.get("max_hp", 1):
+                        all_full = False
+                        break
+            else:
+                all_full = False
+            if all_full and ("Pokecenter" in map_name or "Viridian" in map_name):
+                self.completed_ids.append("VIRIDIAN_CENTER")
+                print(f"  [Progress] Auto-marked VIRIDIAN_CENTER (party healed, in Viridian)")
+
+        # - has_oaks_parcel is True but VIRIDIAN_MART not marked
+        if "VIRIDIAN_MART" not in self.completed_ids:
+            if flags.get("has_oaks_parcel", False):
+                self.completed_ids.append("VIRIDIAN_MART")
+                print(f"  [Progress] Auto-marked VIRIDIAN_MART (has_oaks_parcel=true)")
+
+        # - has_pokedex is True but DELIVER_PARCEL not marked
+        if "DELIVER_PARCEL" not in self.completed_ids:
+            if flags.get("has_pokedex", False):
+                self.completed_ids.append("DELIVER_PARCEL")
+                print(f"  [Progress] Auto-marked DELIVER_PARCEL (has_pokedex=true)")
+
+        if removed:
+            self._save_progress()
+
+        return removed
+
     def __init__(self, config_path: str = "config.yaml"):
         config = load_config(config_path)
         pa_config = get_pokemon_agent_config(config)
@@ -1007,6 +1105,16 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
             if not state:
                 print("[!] No state from server. Stopping.")
                 break
+
+            # On the very first step, re-validate persisted progress against
+            # current game state. After a save/load or restart, completed_ids
+            # may be stale (e.g. VIRIDIAN_CENTER marked done but party is at
+            # 2/23 HP). Remove contradictions so the agent can re-pick the
+            # right objective for current reality.
+            if self.step_count == 1:
+                removed = self._revalidate_progress(state)
+                if removed:
+                    print(f"  [Progress] Revalidated: removed {len(removed)} stale objectives")
 
             # Re-entry detection needs to know what map we were on BEFORE this
             # turn's observe. Shift: prev_map = last_map (from end of previous
