@@ -34,3 +34,13 @@ def push_token(token: str, agent_type: str = "", base_url: str = "http://localho
         )
     except Exception:
         pass  # never let token streaming break the agent
+
+
+def push_nav_data(nav_data: dict, base_url: str = "http://localhost:8765", timeout: int = 5) -> bool:
+    """Push A* navigation data to the dashboard for display."""
+    try:
+        resp = requests.post(f"{base_url}/nav", json=nav_data, timeout=timeout)
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"[Dashboard] Nav push error: {e}")
+        return False

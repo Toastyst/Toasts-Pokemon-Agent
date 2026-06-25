@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=19">
+    <link rel="stylesheet" href="style.css?v=20">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23142d14'/><rect x='3' y='3' width='10' height='10' fill='%238bac0f'/><rect x='6' y='6' width='4' height='4' fill='%23142d14'/></svg>">
 </head>
 <body>
@@ -197,6 +197,30 @@
                     </div>
                     <pre class="collision-grid" id="collisionGrid">loading…</pre>
                 </div>
+                <div class="nav-panel">
+                    <div class="nav-head">
+                        <span class="collision-title">A* NAV</span>
+                        <span class="nav-status" id="navStatus">idle</span>
+                    </div>
+                    <div class="nav-body">
+                        <div class="nav-row">
+                            <span class="nav-k">TARGET</span>
+                            <span class="nav-v" id="navTarget">—</span>
+                        </div>
+                        <div class="nav-row">
+                            <span class="nav-k">GPS</span>
+                            <span class="nav-v" id="navGPS">—</span>
+                        </div>
+                        <div class="nav-row">
+                            <span class="nav-k">WALKABLE</span>
+                            <span class="nav-v" id="navWalkable">—</span>
+                        </div>
+                        <div class="nav-path-wrap">
+                            <span class="nav-k">A* PATH</span>
+                            <div class="nav-path" id="navPath">—</div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="console-right">
                 <div class="console-stream" id="consoleStream">
@@ -207,6 +231,6 @@
     </section>
 
 </div>
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>

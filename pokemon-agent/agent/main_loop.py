@@ -892,6 +892,19 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
                 # Override GPS with A* first step if path found
                 suggested_direction = astar_first
 
+        # --- Push A* nav data to dashboard ---
+        try:
+            from pokemon_agent.agent.utils.dashboard import push_nav_data
+            push_nav_data({
+                "planned_path": self.planned_path,
+                "target_position": list(target_position) if target_position else None,
+                "suggested_direction": suggested_direction,
+                "walkable_directions": walkable_directions or [],
+                "current_step": getattr(self, "_astar_step_idx", 0),
+            }, base_url=self.base_url)
+        except Exception:
+            pass  # dashboard not available, non-fatal
+
         # --- P1: Detect oscillation and build nudge ---
         oscillation_nudge = self._detect_oscillation(game_state)
 
@@ -1011,6 +1024,13 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
             "press_left": "left", "press_right": "right",
         }
         self.last_move_direction = dir_map.get(action)
+        # Track A* path progress: increment step counter if we moved
+        if self.planned_path and self.last_position != self.current_position:
+            # Check if the action matches the first step in the planned path
+            step_dir = self.planned_path[0].replace("walk_", "press_")
+            if action == step_dir or action == self.planned_path[0]:
+                self.planned_path = self.planned_path[1:]
+                self._astar_step_idx = getattr(self, "_astar_step_idx", 0) + 1
         new_state = self.executor.step(action)
         if new_state:
             self.current_position = (new_state.get("x", 0), new_state.get("y", 0))

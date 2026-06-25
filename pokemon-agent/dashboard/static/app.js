@@ -154,6 +154,100 @@
         $('gameScreen').src='data:image/png;base64,'+b64;
     }
 
+    // ---- A* NAV panel ----
+    var navLastPathLen = 0;
+    var navLastTarget = '';
+    function renderNav(state) {
+        var targetEl = $('navTarget');
+        var gpsEl = $('navGPS');
+        var walkableEl = $('navWalkable');
+        var pathEl = $('navPath');
+        var statusEl = $('navStatus');
+
+        // Use the dedicated 'nav' object from server if present,
+        // otherwise fall back to top-level fields for backward compat
+        var nav = state.nav || state;
+
+        if (!state) {
+            targetEl.textContent = '—';
+            gpsEl.textContent = '—';
+            walkableEl.textContent = '—';
+            pathEl.textContent = '—';
+            statusEl.textContent = 'idle';
+            statusEl.className = 'nav-status';
+            return;
+        }
+
+        // Target: use target_position from nav if available
+        var target = nav.target_position || nav.target || null;
+        if (target) {
+            var tx = target[0] != null ? target[0] : (target.x != null ? target.x : '?');
+            var ty = target[1] != null ? target[1] : (target.y != null ? target.y : '?');
+            targetEl.textContent = '(' + tx + ', ' + ty + ')';
+            targetEl.className = 'nav-v target';
+        } else {
+            targetEl.textContent = '—';
+            targetEl.className = 'nav-v';
+        }
+
+        // GPS suggested direction
+        var gps = nav.suggested_direction || nav.gps || null;
+        if (gps) {
+            var arrowMap = {'up':'↑','down':'↓','left':'←','right':'→'};
+            var dirKey = gps.replace('press_','').replace('walk_','');
+            gpsEl.textContent = arrowMap[dirKey] || dirKey;
+            gpsEl.className = 'nav-v gps';
+        } else {
+            gpsEl.textContent = '—';
+            gpsEl.className = 'nav-v';
+        }
+
+        // Walkable directions
+        var walkable = nav.walkable_directions || [];
+        if (walkable && walkable.length) {
+            var walkSymbols = walkable.map(function(d) {
+                if (d.indexOf('up')>-1) return '↑';
+                if (d.indexOf('down')>-1) return '↓';
+                if (d.indexOf('left')>-1) return '←';
+                if (d.indexOf('right')>-1) return '→';
+                return d.replace('walk_', '');
+            });
+            walkableEl.textContent = walkSymbols.join(' ');
+            walkableEl.className = 'nav-v';
+        } else {
+            walkableEl.textContent = '—';
+            walkableEl.className = 'nav-v blocked';
+        }
+
+        // A* path
+        var path = nav.planned_path || nav.astar_path || [];
+        if (path && path.length) {
+            var pathHtml = '';
+            var currentIdx = nav.current_step || 0;
+            for (var i = 0; i < path.length; i++) {
+                if (i > 0) pathHtml += '<span class="nav-arrow">→</span>';
+                var cls = i < currentIdx ? 'nav-step done' : (i === currentIdx ? 'nav-step current' : 'nav-step');
+                var sym = path[i];
+                if (sym.indexOf('up')>-1) sym = '↑';
+                else if (sym.indexOf('down')>-1) sym = '↓';
+                else if (sym.indexOf('left')>-1) sym = '←';
+                else if (sym.indexOf('right')>-1) sym = '→';
+                pathHtml += '<span class="' + cls + '">' + sym + '</span>';
+            }
+            pathEl.innerHTML = pathHtml;
+            navLastPathLen = path.length;
+            navLastTarget = target ? targetEl.textContent : '';
+            statusEl.textContent = path.length + ' steps';
+            statusEl.className = 'nav-status active';
+        } else {
+            pathEl.textContent = 'no path';
+            statusEl.textContent = 'idle';
+            statusEl.className = 'nav-status';
+            navLastPathLen = 0;
+            navLastTarget = '';
+        }
+    }
+
     // ---- collision map ----
     function renderCollision(state) {
         if (!state || !state.collision) return;
@@ -269,6 +363,7 @@
         renderBadges(p.badge_count||0, p.badges||[]);
         renderTeam(state.party||[]);
         renderCollision(state);
+        renderNav(state);
 
         // dialog
         var dlg=state.dialog;

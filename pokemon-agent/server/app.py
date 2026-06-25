@@ -123,6 +123,15 @@ from collections import deque
 _event_history: deque = deque(maxlen=200)
 _REPLAYABLE = {"reasoning", "decision", "thought", "key_moment", "moment", "alert", "battle", "action"}
 
+# A* navigation data (updated by agent via POST /nav, included in /state response)
+_nav_data: dict = {
+    "planned_path": [],
+    "target_position": None,
+    "suggested_direction": None,
+    "walkable_directions": [],
+    "current_step": 0,
+}
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
@@ -487,6 +496,8 @@ async def get_state():
     _ensure_emulator()
     try:
         state = await _run_sync(_get_state_dict)
+        # Include latest A* navigation data
+        state["nav"] = _nav_data
         return JSONResponse(content=state)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading state: {e}")
@@ -562,11 +573,29 @@ async def push_event(req: EventRequest):
         event["agent"] = req.agent
     # Persist real milestones into the active session's timeline.
     if req.type in ("key_moment", "moment") and req.description \
-            and _active_session is not None and _session_mgr is not None:
-        _session_mgr.add_milestone(_active_session, req.description,
-                                   req.category or "milestone")
+            and _active_session and _session_mgr:
+        _session_mgr.add_milestone(_active_session, req.description)
+    _event_history.append(event)
     await broadcast(event)
-    return {"success": True, "broadcast_to": len(_ws_clients)}
+    return {"status": "ok"}
+
+
+@app.post("/nav")
+async def update_nav(req: dict):
+    """Update A* navigation data for the dashboard nav panel.
+
+    Expected keys: planned_path, target_position, suggested_direction,
+                    walkable_directions, current_step
+    """
+    global _nav_data
+    _nav_data = {
+        "planned_path": req.get("planned_path", []),
+        "target_position": req.get("target_position"),
+        "suggested_direction": req.get("suggested_direction"),
+        "walkable_directions": req.get("walkable_directions", []),
+        "current_step": req.get("current_step", 0),
+    }
+    return {"status": "ok"}
 
 
 @app.get("/objectives")
