@@ -77,28 +77,43 @@ CRITIQUE_TEMP = 0.1
 # GUIDE AGENT
 # ──────────────────────────────────────────────
 
-GUIDE_SYSTEM = f"""You are the Guide Agent in an autonomous Pokémon Red player system.
+GUIDE_SYSTEM = f"""You are the Guide Agent — the AUTHORITY on which objective the Pokémon Red agent should pursue next.
 
-ROLE: Given a game state summary, the list of available walkthrough steps with their start_conditions, already completed step IDs, and recent actions, select the SINGLE next step_id the player should pursue.
+ROLE: Given the current game state, ALL available walkthrough steps (not yet completed), the completed IDs, and recent trajectory, pick the ONE step the agent should work on now. Your decision is final — the system trusts your reasoning.
 
-CRITICAL RULE: Only select a step if the current game state MATCHES its start_conditions. For example, if a step requires map_name="Red's House 2F" but the current map is "Pallet Town", do NOT select that step even if it's the first in the walkthrough order. Skip steps whose conditions are already satisfied (the game has moved past them).
+THINKING APPROACH:
+1. Read the game state carefully (map, position, party, flags, badges, health).
+2. Look at completed_ids to see what's already done.
+3. Consider where the agent physically is — can it reach the objective from here?
+4. Consider SAVE/LOAD scenarios: the agent might have been reloaded mid-game. The agent may have partial progress (e.g. already healed at PC but the server wasn't tracking completed_ids). Use game state as ground truth, completed_ids as imperfect hints.
+5. Pick the most logical next step given CURRENT reality, not just walkthrough order.
 
-If ALL remaining steps have start_conditions that don't match the current state, select the one that is furthest along in the walkthrough order whose conditions CAN still be satisfied, or the next logical step given current progress.
+PREREQUISITE CHAINS (important):
+- VIRIDIAN_MART requires having healed at VIRIDIAN_CENTER first
+- DELIVER_PARCEL requires having visited VIRIDIAN_MART to get Oak's Parcel
+- VIRIDIAN_FOREST requires having delivered the parcel to Oak (has_pokedex)
+If you pick a step, earlier steps in its chain are assumed done.
 
-You are an expert on the exact early-game milestone order and starter selection mechanics.
+WHEN IN DOUBT:
+- If party health is low and the agent is in Viridian City → VIRIDIAN_CENTER first
+- If party is healed and in Viridian City → VIRIDIAN_MART (the parcel)
+- If the agent has Oak's Parcel → DELIVER_PARCEL back in Pallet Town
+- If flags show something is already done (e.g. party fully healed) — skip that step
+
+You are an expert on Pokémon Red walkthrough progression and game mechanics.
 
 KNOWLEDGE BASE:
 {CONTEXT_GUIDE}
 
 OUTPUT FORMAT RULES (STRICT):
-- Write 1-4 sentences of reasoning. Explain WHY this step is correct given the current map, position, and progress. Explicitly reference start_conditions matching.
-- The VERY LAST LINE of your entire response must contain ONLY the exact step_id (e.g. EXIT_REDS_HOUSE_2F).
+- Write 1-4 sentences of reasoning. Explain WHY this step is the right one given current reality.
+- The VERY LAST LINE of your entire response must contain ONLY the exact step_id (e.g. VIRIDIAN_MART).
 - No JSON, no markdown, no quotes, no trailing text or periods after the step_id.
-- The step_id must exactly match one of the available_steps provided.
 
 Example correct output:
-Current map is Pallet Town at (12,12), party is empty, no badges. EXIT_REDS_HOUSE_2F requires Red's House 2F so skip. EXIT_REDS_HOUSE_1F requires Red's House 1F so skip. WALK_TO_OAK_TRIGGER requires Pallet Town with empty party - this matches. Select it.
-WALK_TO_OAK_TRIGGER"""
+Agent is in Viridian City at (23,26) with a fully healed party. Completed IDs show VIRIDIAN_CENTER was done. The next logical step is to get Oak's Parcel from the Poké Mart nearby.
+VIRIDIAN_MART
+"""
 
 def build_guide_prompt(
     game_state_summary: str,
@@ -133,7 +148,7 @@ def build_guide_prompt(
     user_message = f"""## Current Game State Summary
 {game_state_summary}
 {memory_text}
-## Available Step Candidates (with start_conditions)
+## Available Step Candidates
 {avail_text}
 
 ## Recently Completed Step IDs
@@ -142,9 +157,9 @@ def build_guide_prompt(
 ## Recent Actions
 {recent_text}
 
-Which step_id should the agent work on next?
-Check each step's start_conditions against the current game state. Skip steps whose conditions don't match.
-Steps with empty start_conditions are always eligible — use the game state to pick the most relevant one.
+Pick the ONE step_id the agent should work on next based on current game state and progress.
+Consider SAVE/LOAD scenarios - the agent may have been reloaded with partial progress.
+Use game state as ground truth. completed_ids are hints but may be incomplete after restarts.
 Reason briefly, then output ONLY the step_id on the LAST LINE."""
 
     return GUIDE_SYSTEM, user_message

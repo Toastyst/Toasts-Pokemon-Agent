@@ -397,6 +397,10 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         Call GuideAgent to determine the next objective.
         Only called when there is no active objective.
         Returns the guide step dict, or None if all done.
+
+        The LLM GuideAgent is the AUTHORITY on which objective to pick.
+        We trust its reasoning — programmatic checks only provide context,
+        never override the LLM's decision.
         """
         # 0. RE-ENTRY CHECK: detect if agent accidentally re-entered a completed building
         reentry_obj = self._detect_reentry(game_state)
@@ -417,20 +421,12 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         if hasattr(self, 'memory'):
             guide_memory = self.memory.build_guide_memory_prompt()
 
-        # Filter candidates by start_conditions
-        eligible = [
-            s for s in candidates
-            if self._check_start_conditions(game_state, s)
-        ]
-
-        # If no candidates match start_conditions, use all candidates
-        # (the LLM will pick the right one from context)
-        if not eligible:
-            eligible = candidates
-
+        # Pass ALL non-completed candidates to the LLM.
+        # The LLM reasons about game state, completed_ids, and trajectory
+        # to pick the correct next objective — we trust its decision.
         result = self.guide_agent.act(
             game_state=game_state,
-            guide_steps=eligible[:8],  # Limit to 8 to keep context small
+            guide_steps=candidates[:10],  # Limit to 10 to keep context small
             completed_ids=self.completed_ids,
             trajectory=self.trajectory,
             memory_context=guide_memory,
@@ -439,37 +435,59 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
         step_id = result.get("step_id")
         reasoning = result.get("reasoning", "")
 
-        # Try LLM-selected step first (if it passes start_condition check)
+        # Trust the LLM's choice — find the step in our guide
         if step_id:
             for step in self.guide_steps:
                 if step["id"] == step_id and step["id"] not in self.completed_ids:
-                    if self._check_start_conditions(game_state, step):
-                        print(f"  [Guide] Selected: {step_id} (start_conditions match)")
-                        push_event("think", f"New objective: {step['description']}", base_url=self.base_url)
-                        return step
-                    else:
-                        print(f"  [Guide] LLM selected {step_id} but start_conditions don't match — overriding")
+                    print(f"  [Guide] LLM selected: {step_id}")
+                    if reasoning:
+                        print(f"  [Guide] Reasoning: {reasoning[:200]}")
+                    push_event("think", f"New objective: {step['description']}", base_url=self.base_url)
 
-        # Fallback: pick first eligible candidate whose start_conditions match
-        for step in eligible:
-            if self._check_start_conditions(game_state, step):
-                print(f"  [Guide] Fallback (sequential): {step['id']} (start_conditions match)")
-                push_event("think", f"New objective: {step['description']}", base_url=self.base_url)
-                return step
+                    # Auto-mark earlier sequential objectives as complete.
+                    # If the LLM picks VIRIDIAN_MART, then VIRIDIAN_CENTER is done.
+                    self._auto_mark_prerequisites(step_id)
 
-        # Last resort: force-skip earlier objectives that clearly can't be active
-        # (wrong map), and pick the first candidate whose map matches.
-        # Do NOT blindly return candidates[0] — it may be completely impossible.
-        skip_map = game_state.get("map_name", "")
+                    return step
+
+        # LLM didn't return a valid step_id — fallback to first candidate
+        # that matches current map (light safety net, not override)
+        current_map = game_state.get("map_name", "")
         for step in candidates:
             step_start = step.get("start_conditions", {})
             start_map = step_start.get("map_name", "")
-            # If start_conditions don't require a specific map, it's acceptable
-            if not start_map:
-                print(f"  [Guide] Fallback (no map constraint): {step['id']}")
+            if not start_map or start_map == current_map:
+                print(f"  [Guide] Fallback (map match): {step['id']}")
                 push_event("think", f"New objective: {step['description']}", base_url=self.base_url)
+                self._auto_mark_prerequisites(step["id"])
                 return step
+
+        # Absolute last resort: first available candidate
+        if candidates:
+            print(f"  [Guide] Fallback (first available): {candidates[0]['id']}")
+            self._auto_mark_prerequisites(candidates[0]["id"])
+            return candidates[0]
         return None
+
+    def _auto_mark_prerequisites(self, step_id: str):
+        """
+        When the LLM picks a step, auto-mark earlier objectives that are
+        logically prerequisites. E.g. picking VIRIDIAN_MART implies
+        VIRIDIAN_CENTER was completed.
+        """
+        # Define prerequisite chains: if you pick X, these are assumed done
+        prereq_chains = {
+            "VIRIDIAN_MART": ["VIRIDIAN_CENTER"],
+            "DELIVER_PARCEL": ["VIRIDIAN_CENTER", "VIRIDIAN_MART"],
+            "VIRIDIAN_FOREST": ["VIRIDIAN_CENTER", "VIRIDIAN_MART", "DELIVER_PARCEL"],
+            "BOULDER_BADGE": ["VIRIDIAN_CENTER", "VIRIDIAN_MART", "DELIVER_PARCEL", "VIRIDIAN_FOREST"],
+        }
+
+        prerequisites = prereq_chains.get(step_id, [])
+        for prereq in prerequisites:
+            if prereq not in self.completed_ids:
+                self.completed_ids.append(prereq)
+                print(f"  [Guide] Auto-marked {prereq} as complete (prerequisite for {step_id})")
 
     def _get_dest_map_for_action(self, game_state: Dict[str, Any], action: str) -> Optional[str]:
         """Check what map the agent would end up on after executing an action.
