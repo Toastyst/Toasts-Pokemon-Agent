@@ -197,9 +197,11 @@ IF YOU ARE RIGHT OF AN ITEM (item X is less than your X): press_left first to fa
 
 DO NOT press_a if you are not facing the target. It will fail silently.
 
+COUNTER NPCS: Some NPCs stand behind counters (Pokemon Center nurse, Mart clerk). The counter tile is # — you cannot walk onto it. Stand on the walkable tile directly below the counter (with # above you), face up, press A. The game routes your interaction through the counter to the NPC.
+
 MAP READING (use the grid below):
 The collision grid shows your immediate surroundings. @ is you, . is walkable, # is a wall, S is a warp/stairs, I is an item/NPC.
-Use the grid to plan your route. If the GPS suggestion conflicts with the objective, TRUST THE OBJECTIVE — the GPS may be outdated or wrong.
+Use the grid to plan your route. The A* path (shown as "Suggested Route") is computed to avoid walls and obstacles — FOLLOW IT even if the direct line to the target looks clear. Walls and trees may block your path even when the target is visible.
 If your last action was blocked (didn't move), try a DIFFERENT direction that is walkable on the grid.
 
 DOORMAT EXITS: If you are standing on a D (doormat) tile, press_down to exit. The server overrides collision for doormat exits — it's OK if the tile below shows #.
@@ -250,11 +252,14 @@ def build_navigation_prompt(
     recent_history: Optional[List[Dict[str, Any]]] = None,
     player_pos: Optional[Tuple[int, int]] = None,
     player_map: str = "",
+    visited_tiles: Optional[set] = None,
 ) -> Tuple[str, str]:
     """Build (system, user) for the Navigation agent.
 
     player_pos / player_map: current tile coordinates used to show visited
     tile context in the prompt (which tiles have been explored already).
+    visited_tiles: set of (x,y) tiles actually visited on this map — used
+    to discourage oscillation and re-exploration.
     """
     hints_text = "\n".join(f"- {h}" for h in hints) if hints else ""
 
@@ -369,28 +374,26 @@ def build_navigation_prompt(
     if memory_context:
         memory_text = f"\n## Memory (prior discoveries):\n{memory_context}"
 
-    # Build visited-tile context — show the LLM which nearby walkable tiles
-    # it has already been to, so it can avoid re-exploring dead ends.
+    # Build visited-tile context — show the LLM which nearby tiles have
+    # actually been visited (from persistent tracking), so it can avoid
+    # oscillation and re-exploration of dead ends.
     visited_text = ""
-    if player_pos and player_map and game_state:
-        from pokemon_agent.agent.utils.state_parser import get_collision_grid
-        grid = get_collision_grid(game_state)
-        if grid:
-            px, py = player_pos
-            visited_nearby = []
-            for dy in range(-2, 3):
-                for dx in range(-2, 3):
-                    nx, ny = px + dx, py + dy
-                    if (nx, ny) == (px, py):
-                        continue
-                    gr, gc = 4 + dy, 5 + dx
-                    if 0 <= gr < len(grid) and 0 <= gc < len(grid[0]):
-                        if grid[gr][gc]:
-                            visited_nearby.append(f"({nx},{ny})")
-            if visited_nearby:
-                visited_text = ("\n## Nearby explored tiles: "
-                               + ", ".join(visited_nearby[:12])
-                               + "\n(Gray = previously visited, prefer unvisited directions when exploring)")
+    if player_pos and player_map and visited_tiles:
+        px, py = player_pos
+        # Show nearby visited tiles (within 5-tile radius)
+        nearby_visited = []
+        for dy in range(-5, 6):
+            for dx in range(-5, 6):
+                nx, ny = px + dx, py + dy
+                if (nx, ny) == (px, py):
+                    continue
+                if (nx, ny) in visited_tiles:
+                    nearby_visited.append(f"({nx},{ny})")
+        if nearby_visited:
+            visited_text = ("\n## Tiles you have already visited on this map:\n"
+                           + ", ".join(nearby_visited[:15])
+                           + "\nDo NOT revisit these tiles unless the objective requires it. "
+                           + "Pick an UNVISITED direction to make progress.")
 
     # Build starter progress — guide the LLM to check balls via dialog.
     # Sprite labels no longer contain starter names (removed to force

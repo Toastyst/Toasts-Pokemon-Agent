@@ -146,11 +146,12 @@
         "party": "health=100%"
       },
       "hints": [
-        "The Pokemon Center is in the southwest part of Viridian City, directly off route 1.",
-        "Its probably the first building and warp you find in town.",
-        "Go inside and walk north toward the counter. Look for the NPC nurse behind the counter.",
-        "Face the nurse and press A to interact. Advance through her dialog (press A) until your Pokemon are healed.",
-        "After healing, walk south to the doormat and press down to exit."
+        "Step 1: Find the Pokemon Center in southwest Viridian City — look for a building with a warp tile near Route 1.",
+        "Step 2: Walk onto the warp tile inside the door to enter the Pokemon Center.",
+        "Step 3: Once INSIDE, walk north toward the counter. The nurse (NPC 0x29) is behind the counter.",
+        "Step 4: COUNTER NPC: Stand on the walkable tile directly below the counter (# above you), face up, press A to interact.",
+        "Step 5: Advance through her dialog (press A repeatedly) until your Pokemon are healed.",
+        "Step 6: After healing, walk south to the doormat and press down to exit."
       ]
     },
     {
@@ -165,10 +166,11 @@
         "flags.has_oaks_parcel": true
       },
       "hints": [
-        "The Mart is in the southeast part of Viridian City.",
-        "Go inside and talk to the clerk behind the counter.",
-        "The clerk gives you Oak's Parcel.",
-        "After this, has_oaks_parcel becomes true."
+        "Step 1: Find the Viridian Mart in southeast Viridian City — look for a building with a warp/door tile.",
+        "Step 2: Enter the building and walk toward the counter at the back.",
+        "Step 3: COUNTER NPC: Stand on the walkable tile directly below the counter (# above you), face up, press A to interact.",
+        "Step 4: The clerk gives you Oak's Parcel.",
+        "Step 5: After this, has_oaks_parcel becomes true."
       ]
     },
     {

@@ -42,6 +42,34 @@ from pokemon_agent.agent.memory.store import PokemonMemory, DialogFact, BattleLo
 
 
 class StandaloneAgent:
+    _PROGRESS_FILE = os.path.expanduser("~/.pokemon-agent/completed_progress.json")
+
+    def _load_progress(self) -> List[str]:
+        """Load completed objective IDs from persistent storage."""
+        try:
+            if os.path.exists(self._PROGRESS_FILE):
+                with open(self._PROGRESS_FILE, "r") as f:
+                    data = json.load(f)
+                    ids = data.get("completed_ids", [])
+                    if ids:
+                        print(f"  [Progress] Restored {len(ids)} completed objectives from last run: {', '.join(ids[:5])}")
+                    return ids
+        except Exception as e:
+            print(f"  [Progress] Could not load previous progress: {e}")
+        return []
+
+    def _save_progress(self):
+        """Persist completed objective IDs to disk."""
+        try:
+            os.makedirs(os.path.dirname(self._PROGRESS_FILE), exist_ok=True)
+            with open(self._PROGRESS_FILE, "w") as f:
+                json.dump({
+                    "completed_ids": self.completed_ids,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }, f)
+        except Exception as e:
+            print(f"  [Progress] Could not save progress: {e}")
+
     def __init__(self, config_path: str = "config.yaml"):
         config = load_config(config_path)
         pa_config = get_pokemon_agent_config(config)
@@ -82,7 +110,7 @@ class StandaloneAgent:
             base_url=provider_cfg["base_url"],
             api_key=api_keys[0],
             model=model_name,
-            max_tokens=8192,
+            max_tokens=16384,
             timeout=120,
             fallback_models=config.get("fallback_models", []),
             api_keys=api_keys,
@@ -116,7 +144,7 @@ class StandaloneAgent:
         # Loop state
         self.step_count = 0
         self.running = False
-        self.completed_ids: List[str] = []
+        self.completed_ids: List[str] = self._load_progress()
         self.current_objective_id: Optional[str] = None
         self.current_objective: Optional[Dict[str, Any]] = None
         self.steps_on_current_objective = 0
@@ -145,6 +173,9 @@ class StandaloneAgent:
 
         # Track position 2 turns ago for ping-pong oscillation detection
         self.position_2_turns_ago: Optional[Tuple[int, int]] = None
+        # Extended position history for detecting broader oscillation patterns
+        self.position_history: List[Tuple[int, int]] = []  # last N positions on current map
+        self.position_history_map: str = ""  # map name for position_history
 
         # Exit avoidance: set of doormat/warp positions we just exited through
         # Temporary — cleared when map changes or after N steps
@@ -426,10 +457,18 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
                 push_event("think", f"New objective: {step['description']}", base_url=self.base_url)
                 return step
 
-        # Last resort: first candidate (shouldn't reach here)
-        if candidates:
-            print(f"  [Guide] WARNING: No candidates match start_conditions. Using first: {candidates[0]['id']}")
-            return candidates[0]
+        # Last resort: force-skip earlier objectives that clearly can't be active
+        # (wrong map), and pick the first candidate whose map matches.
+        # Do NOT blindly return candidates[0] — it may be completely impossible.
+        skip_map = game_state.get("map_name", "")
+        for step in candidates:
+            step_start = step.get("start_conditions", {})
+            start_map = step_start.get("map_name", "")
+            # If start_conditions don't require a specific map, it's acceptable
+            if not start_map:
+                print(f"  [Guide] Fallback (no map constraint): {step['id']}")
+                push_event("think", f"New objective: {step['description']}", base_url=self.base_url)
+                return step
         return None
 
     def _get_dest_map_for_action(self, game_state: Dict[str, Any], action: str) -> Optional[str]:
@@ -507,44 +546,65 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
             print(f"  [A*] Path computation failed: {e}")
             return []
 
-    def _detect_oscillation(self) -> Optional[str]:
-        """Detect ping-pong oscillation and return a nudge message.
+    def _detect_oscillation(self, game_state: dict = None) -> Optional[str]:
+        """Detect oscillation and return a nudge message.
 
-        Two-tier system:
-        - 3+ revisits to same tile → gentle nudge
-        - 6+ revisits → firmer "stuck" notice
-        - Ping-pong (pos A → B → A → B) → perpendicular suggestion
+        Three-tier system:
+        - Ping-pong (A→B→A) → use 2-turn comparison
+        - Recent revisit (tile appears in last 8 positions) → gentle nudge
+        - Broad oscillation (no new tiles in last N steps) → firm "explore differently"
         """
         nudge = None
         cur = self.current_position
         old = self.last_position
         older = getattr(self, 'position_2_turns_ago', None)
 
-        # Ping-pong detection: compares current pos with pos 2 turns ago
-        # and last pos is a different tile (A→B→A pattern)
+        # Ping-pong detection: A→B→A pattern
         if cur and older and cur == older and old and old != cur:
-            nudge = ("⚠️ OSCILLATION DETECTED: You recently went "
+            nudge = ("⚠️ OSCILLATION: You went "
                      f"{older} → {old} → {cur} (ping-pong). Try a "
-                     f"DIFFERENT direction than {old} — you've already "
-                     f"been between these two tiles.")
+                     f"PERPENDICULAR direction — you've already been between "
+                     f"these two tiles.")
 
-        # Tile revisit counting
+        # Tile revisit counting — use actual map name
         if cur:
-            map_name = "current"  # simplified key
-            tile_key = f"{map_name}:{cur[0]}:{cur[1]}"
+            map_name_key = (game_state or {}).get("map_name", "unknown")
+            tile_key = f"{map_name_key}:{cur[0]}:{cur[1]}"
             self.tile_visit_count[tile_key] = \
                 self.tile_visit_count.get(tile_key, 0) + 1
             count = self.tile_visit_count[tile_key]
 
             if count >= 6:
-                nudge = (f"⚠️ STUCK: You have visited tile {cur} {count} "
-                         f"times. You are likely in a loop. Try a "
-                         f"completely different direction.")
+                nudge = (f"⚠️ STUCK at {cur} (visited {count}x). "
+                         f"You are in a loop. Try a completely different path — "
+                         f"the direct route may be blocked.")
             elif count >= 3 and nudge is None:
-                # Only gentle nudge if no ping-pong detected
-                nudge = (f"⚠️ TILE REVISIT: You've been at {cur} {count} "
-                         f"times. Consider trying a different direction "
-                         f"than your recent actions.")
+                nudge = (f"⚠️ TILE REVISIT: {cur} visited {count}x. "
+                         f"Try a different direction than your recent actions.")
+
+        # Extended position-history oscillation: detect when agent hasn't reached
+        # any new tile in the last several steps (wandering in a small area)
+        history = getattr(self, 'position_history', [])
+        if cur and len(history) >= 6:
+            # Count how many of the last 8 positions are NEW (not seen before in window)
+            recent = history[-8:]
+            # If current tile appeared more than twice in recent history → oscillating
+            recent_count = sum(1 for p in recent if p == cur)
+            if recent_count >= 3 and nudge is None:
+                # Find a tile in the recent history that's different from cur
+                different = [p for p in reversed(history[-10:]) if p != cur]
+                if different:
+                    target = different[0]
+                    dx = target[0] - cur[0]
+                    dy = target[1] - cur[1]
+                    dir_hint = ""
+                    if abs(dx) >= abs(dy):
+                        dir_hint = "right" if dx > 0 else "left"
+                    else:
+                        dir_hint = "down" if dy > 0 else "up"
+                    nudge = (f"⚠️ WANDERING: You've returned to {cur} {recent_count} "
+                             f"times recently. Head {dir_hint} toward {target} to "
+                             f"explore new tiles.")
 
         return nudge
 
@@ -678,7 +738,7 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
                     target_position = _intermediate
                     print(f"  [A*] Auto-target: {target_position} (from GPS: {_gps_hint[:30]})")
         self.planned_path = self._compute_astar_path(
-            game_state, target_position, max_steps=8,
+            game_state, target_position, max_steps=20,
             suggested_direction=suggested_direction)
         if self.planned_path:
             print(f"  [A*] Planned route ({len(self.planned_path)} steps): "
@@ -697,7 +757,7 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
                 suggested_direction = astar_first
 
         # --- P1: Detect oscillation and build nudge ---
-        oscillation_nudge = self._detect_oscillation()
+        oscillation_nudge = self._detect_oscillation(game_state)
 
         # --- P2: No-progress detection ---
         no_progress_nudge = None
@@ -768,6 +828,7 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
             player_pos=pos,
             player_map=map_name,
             viewer_input=viewer_input,
+            visited_tiles=self.visited_tiles.get(map_name, set()),
         )
 
         action = result.get("action", "wait")
@@ -788,6 +849,19 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
 
         # --- Update position_2_turns_ago for ping-pong detection ---
         self.position_2_turns_ago = self.last_position
+
+        # --- Update position_history for broad oscillation detection ---
+        cur = self.current_position
+        if cur:
+            map_name = game_state.get("map_name", "") if game_state else ""
+            if self.position_history_map != map_name:
+                # Map changed — fresh history
+                self.position_history_map = map_name
+                self.position_history = [cur]
+            else:
+                self.position_history.append(cur)
+                if len(self.position_history) > 15:
+                    self.position_history.pop(0)
 
         return result
 
@@ -1311,6 +1385,74 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
                 print("[!] No state from server. Stopping.")
                 break
 
+            # 1e. POST-DIALOG CRITIQUE — programmatic instant check first
+            # After a dialog ends, check completion conditions without an LLM call.
+            # If the objective is already complete, skip the wasted nav turn.
+            # If NOT complete, fall through to Navigate as normal (no extra LLM call).
+            if self.current_objective and state.get("dialog", {}).get("active", False) is False:
+                obj = self.current_objective
+                completion_conditions = obj.get("completion_conditions", {})
+                if completion_conditions:
+                    all_met = self._check_conditions(state, completion_conditions)
+                    if all_met:
+                        print(f"  [Post-Dialog Critique]: ✓ PASS (programmatic) — all conditions met")
+                        push_event("critique", "PASS — all conditions met (post-dialog)", base_url=self.base_url)
+                        self.log_trajectory(
+                            obj["id"], obj["description"], "dialog_complete",
+                            self.objective_start_state or state, state, True, "all conditions met",
+                        )
+                        self.objective_start_state = state
+                        self.current_objective = None
+                        self.current_objective_id = None
+                        self.steps_on_current_objective = 0
+                        self.consecutive_no_progress = 0
+                        self.actions_on_objective = []
+                        self.tile_visit_count.clear()
+                        self.position_history.clear()
+                        print(f"  [✓] Objective complete via dialog! Moving to next objective.")
+                        self.completed_ids.append(obj["id"])
+                        self._save_progress()
+
+                        # If agent is still inside a building, inject EXIT objective
+                        building_keywords = ["Center", "Mart", "House", "Lab", "Gym",
+                                             "Tower", "Mansion", "Hideout", "Plant",
+                                             "Lighthouse", "Museum"]
+                        current_map = state.get("map_name", "")
+                        if any(kw in current_map for kw in building_keywords):
+                            exit_obj = {
+                                "id": f"EXIT_{current_map.upper().replace(' ', '_')}",
+                                "description": f"Exit {current_map}",
+                                "category": "recovery",
+                                "start_conditions": {},
+                                "completion_conditions": {"map_name": f"!{current_map}"},
+                                "hints": [
+                                    f"You are inside {current_map}. Find the doormat or door tile (D on the collision map).",
+                                    "Walk onto the doormat and press DOWN to exit the building.",
+                                    "Do NOT wander — head straight for the exit."
+                                ],
+                            }
+                            print(f"  [✓] Injecting EXIT objective — agent is still inside {current_map}")
+                            self.current_objective = exit_obj
+                            self.current_objective_id = exit_obj["id"]
+                            self.steps_on_current_objective = 0
+                            self.consecutive_no_progress = 0
+                            self.actions_on_objective = []
+                            self.tile_visit_count.clear()
+                            self.position_history.clear()
+                            self.objective_start_state = state
+                            self._push_state("navigate")
+                            # Fall through to Navigate (Guide skipped since objective is set)
+                        else:
+                            continue  # no exit needed, go back to top → Guide
+                    else:
+                        # Conditions not met — agent needs to keep navigating
+                        # Don't waste a full LLM Critique call here; the regular
+                        # Critique at step 5 will handle it after execution.
+                        pass
+                else:
+                    # Dialog happened but objective not done yet — continue nav
+                    self._last_critique = None
+
             # 2. GUIDE — only when no active objective
             if self.current_objective is None:
                 self._push_state("guide")
@@ -1508,6 +1650,7 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
             # 8. UPDATE
             if success:
                 self.completed_ids.append(obj["id"])
+                self._save_progress()
                 print(f"  ★★ {obj['id']} COMPLETED!")
                 push_event("key_moment", f"Completed: {obj['description']}", base_url=self.base_url)
                 self.current_objective = None
@@ -1532,11 +1675,13 @@ errors. Preserve conversation order. Output ONLY the cleaned dialog text."""
                 if force_complete:
                     print(f"  ⚠ Max steps reached but conditions met. Completing {obj['id']}.")
                     self.completed_ids.append(obj["id"])
+                    self._save_progress()
                     push_event("key_moment", f"Completed (max steps): {obj['description']}", base_url=self.base_url)
                 else:
                     print(f"  ⚠ Max steps ({self.max_steps_per_objective}) for {obj['id']}. Force-skipping.")
                     push_event("think", f"Skipped {obj['id']} after {self.max_steps_per_objective} steps", base_url=self.base_url)
                     self.completed_ids.append(obj["id"])
+                    self._save_progress()
 
                 self.current_objective = None
                 self.current_objective_id = None
